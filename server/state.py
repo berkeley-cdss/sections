@@ -13,15 +13,14 @@ from zoneinfo import ZoneInfo
 from import_sheet import parse_time_string
 
 import flask
-from flask import abort, jsonify, render_template, request, current_app, session
-from flask_login import current_user, login_required, login_user
+from flask import Blueprint, abort, g, jsonify, render_template, request, current_app, session
+from flask_login import current_user, login_required
 from sqlalchemy import func
 from sqlalchemy.orm import joinedload, noload
 
 import canvas_service
-from course import format_coursecode, get_course
+from offering import OFFERING_URL_PREFIX, get_course, get_course_name, load_offering
 from import_sheet import import_sections_from_url, import_enrollment_from_url
-from slack import post_slack_message
 
 from models import (
     Attendance,
@@ -109,6 +108,18 @@ def add_student_helper(student: User, target_section: Section):
     db.session.add(student)
 
 def create_state_client(app: flask.Flask):
+    # Every offering page and API lives under /offerings/<canvas course id>/.
+    bp = Blueprint("offering", __name__, url_prefix=OFFERING_URL_PREFIX)
+
+    @bp.url_value_preprocessor
+    def pull_course(endpoint, values):
+        load_offering(values.pop("canvas_course_id"))
+
+    @bp.url_defaults
+    def add_course(endpoint, values):
+        if "offering" in g:
+            values.setdefault("canvas_course_id", g.offering.canvas_id)
+
     def api(handler):
         def wrapped():
             try:
@@ -120,7 +131,7 @@ def create_state_client(app: flask.Flask):
             except Failure as failure:
                 return jsonify({"success": False, "message": str(failure)})
 
-        app.add_url_rule(
+        bp.add_url_rule(
             f"/api/{handler.__name__}", handler.__name__, wrapped, methods=["POST"]
         )
 
@@ -134,13 +145,14 @@ def create_state_client(app: flask.Flask):
                 abort(401)
 
             user = User.query.filter_by(course=get_course(), email=email).one()
-            login_user(user)
+            # Act as this user for this request only, without touching the session.
+            g._login_user = user
             try:
                 return jsonify({"success": True, "data": handler(**args)})
             except Failure as failure:
                 return jsonify({"success": False, "message": str(failure)})
 
-        app.add_url_rule(
+        bp.add_url_rule(
             f"/api/sudo/{handler.__name__}",
             "sudo_" + handler.__name__,
             sudo_wrapped,
@@ -149,18 +161,21 @@ def create_state_client(app: flask.Flask):
 
         return handler
 
-    @app.route("/", endpoint="index")
-    @app.route("/history/")
-    @app.route("/lab/")
-    @app.route("/disc/")
-    @app.route("/tutoring/")
-    @app.route("/admin/")
-    @app.route("/section/<path:path>")
-    @app.route("/user/<path:path>")
+    @bp.route("/", endpoint="index")
+    @bp.route("/history/")
+    @bp.route("/lab/")
+    @bp.route("/disc/")
+    @bp.route("/tutoring/")
+    @bp.route("/admin/")
+    @bp.route("/section/<path:path>")
+    @bp.route("/user/<path:path>")
     def generic(**_):
-        return render_template("index.html", course=format_coursecode(get_course()))
+        # Loading the user here shows a signed-in visitor who isn't enrolled a
+        # clear 403 page, instead of a broken app.
+        current_user.is_authenticated
+        return render_template("index.html", course=get_course_name())
 
-    @app.route("/debug")
+    @bp.route("/debug")
     def debug():
         refresh_state()
         return "<body></body>"
@@ -185,8 +200,9 @@ def create_state_client(app: flask.Flask):
             "taughtSections": None,
             "sections": [],
             "currentUser": None,
-            "course": format_coursecode(get_course()),
+            "course": get_course_name(),
             "config": config.json,
+            "serviceAccountEmail": current_app.config.get("GOOGLE_SERVICE_ACCOUNT_EMAIL"),
             "custom": None,
         }
 
@@ -750,29 +766,6 @@ def create_state_client(app: flask.Flask):
 
     @api
     @admin_required
-    def remind_tutors_to_setup_zoom_links():
-        sections: List[Section] = Section.query.filter_by(
-            call_link=None, course=get_course()
-        ).all()
-        tutor_emails = set()
-        for section in sections:
-            tutor_emails.add(section.staff.email)
-        tutor_emails = sorted(tutor_emails)
-        if not tutor_emails:
-            raise Failure("All tutors have set up their Zoom links!")
-
-        message = (
-            "The following tutors have not yet set up their Zoom links for all their sections:\n"
-            + "\n".join(f" • {email}" for email in tutor_emails)
-            + "\n Please do so ASAP! Thanks."
-        )
-
-        post_slack_message(message)
-
-        return refresh_state()
-
-    @api
-    @admin_required
     def import_sections_from_sheet(url: str):
         import_sections_from_url(url)
         return refresh_state()
@@ -921,3 +914,5 @@ def create_state_client(app: flask.Flask):
             )
             tutoring_present_days = [attendance.session.start_time for attendance in attendances]
         return {"attendance": tutoring_present_days}
+
+    app.register_blueprint(bp)

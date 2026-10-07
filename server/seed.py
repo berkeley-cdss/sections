@@ -1,19 +1,22 @@
+import sys
 from datetime import datetime, timedelta
 from random import choice
 
 from zoneinfo import ZoneInfo
 
-from course import get_course
 from main import app
-from models import Section, User, db, user_section
+from models import Offering, Section, User, db, user_section
 
 
-def seed():
+def seed(canvas_course_id: int):
+    """Fill a development database with demo sections for the given Canvas course."""
     if app.config["APP_ENV"] != "development":
         return
     with app.app_context():
-        course = get_course()
         db.create_all()
+        if Offering.query.filter_by(canvas_id=canvas_course_id).one_or_none() is None:
+            db.session.add(Offering(canvas_id=canvas_course_id, key=str(canvas_course_id), name="Demo 101"))
+        course = str(canvas_course_id)
         pst = ZoneInfo("US/Pacific")
         discussions, labs = [], []
         section_count = 100
@@ -69,4 +72,6 @@ def seed():
 
 
 if __name__ == "__main__":
-    seed()
+    if len(sys.argv) != 2:
+        sys.exit("usage: python seed.py <canvas course id>  (e.g. 157 for Mango 101 on the sandbox)")
+    seed(int(sys.argv[1]))

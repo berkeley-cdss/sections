@@ -61,7 +61,7 @@ export default function MainPage(): React.Node {
                     block
                     variant="warning"
                     size="lg"
-                    href={`/oauth/canvas_login?next=${encodeURIComponent(window.location.pathname)}`}
+                    href={`/login/?next=${encodeURIComponent(window.location.pathname)}`}
                   >
                     Sign in
                   </Button>

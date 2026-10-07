@@ -1,0 +1,25 @@
+{% extends 'base.html.j2' %}
+
+{% block body %}
+
+<div class="mdl-grid main-container">
+  <div class="mdl-cell mdl-cell--12-col">
+    <h5>Choose courses to set up Sections with:</h5>
+    <p>If you expect to see an offering but it is not listed, please make sure its corresponding Canvas course exists and is active, then log out and log in again.</p>
+  </div>
+  <form method="post" class="mdl-cell mdl-cell--12-col">
+    <div class="checkbox">
+      <ul id="offerings">
+        {% for canvas_id, info in candidates %}
+          <li>
+            <input id="offerings-{{ loop.index0 }}" name="offerings" type="checkbox" value="{{ canvas_id }}">
+            <label for="offerings-{{ loop.index0 }}">{{ (info.start_at or "")[:7] }} | {{ info.code }} | {{ info.name }}</label>
+          </li>
+        {% endfor %}
+      </ul>
+    </div>
+    <div class="form-buttons"><input class="mdl-button mdl-js-button mdl-button--raised" type="submit" value="import"></div>
+  </form>
+</div>
+
+{% endblock %}

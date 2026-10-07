@@ -122,7 +122,7 @@ export default function DiscPage(): React.Node {
             {state.currentUser == null ? (
               <Col>
                 <FlexLayout>
-                  <Button block variant="warning" size="lg" href="/oauth/canvas_login">
+                  <Button block variant="warning" size="lg" href={`/login/?next=${encodeURIComponent(window.location.pathname)}`}>
                     Sign in
                   </Button>
                 </FlexLayout>

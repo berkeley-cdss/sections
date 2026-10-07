@@ -91,10 +91,6 @@ export default function AdminPage(): React.Node {
     navigator.clipboard.writeText(students);
     pushMessage("Copied");
   });
-  const remindTutorsToSetupZoomLinks = useAPI(
-    "remind_tutors_to_setup_zoom_links"
-  );
-
   const [resetting, setResetting] = useState(false);
   const resetSections = useAPI("reset_sections");
 
@@ -353,16 +349,6 @@ export default function AdminPage(): React.Node {
                   />
                 </p>
               )}
-
-              {/* Line 6: Reminders */}
-              <p>
-                <Button
-                  variant="danger"
-                  onClick={() => remindTutorsToSetupZoomLinks()}
-                >
-                  Remind Tutors to Setup Zoom Links
-                </Button>
-              </p>
             </Tab>
             {tabsConfig.map((tab) => (
               <Tab key={tab.eventKey} eventKey={tab.eventKey} title={tab.title}>

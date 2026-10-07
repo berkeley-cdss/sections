@@ -110,6 +110,8 @@ export type State = {
   taughtSections: Array<Section>,
   currentUser: ?PersonDetails,
   config: CourseConfig,
+  // Google account to share import spreadsheets with, if configured.
+  serviceAccountEmail: ?string,
 };
 
 export const TZ = "America/Los_Angeles";
