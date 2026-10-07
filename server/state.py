@@ -21,7 +21,6 @@ from sqlalchemy.orm import joinedload, noload
 import canvas_service
 from course import COURSE_URL_PREFIX, get_course, get_course_name, load_course
 from import_sheet import import_sections_from_url, import_enrollment_from_url
-from slack import post_slack_message
 
 from models import (
     Attendance,
@@ -764,29 +763,6 @@ def create_state_client(app: flask.Flask):
         if user is None:
             raise Failure(f"No user found with email {email}")
         return user.id
-
-    @api
-    @admin_required
-    def remind_tutors_to_setup_zoom_links():
-        sections: List[Section] = Section.query.filter_by(
-            call_link=None, course=get_course()
-        ).all()
-        tutor_emails = set()
-        for section in sections:
-            tutor_emails.add(section.staff.email)
-        tutor_emails = sorted(tutor_emails)
-        if not tutor_emails:
-            raise Failure("All tutors have set up their Zoom links!")
-
-        message = (
-            "The following tutors have not yet set up their Zoom links for all their sections:\n"
-            + "\n".join(f" • {email}" for email in tutor_emails)
-            + "\n Please do so ASAP! Thanks."
-        )
-
-        post_slack_message(message)
-
-        return refresh_state()
 
     @api
     @admin_required

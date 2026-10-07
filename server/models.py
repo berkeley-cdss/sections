@@ -338,7 +338,6 @@ class Course(db.Model):
     code: str = db.Column(db.String(255), nullable=True)
     # ISO 8601 start of the course's term, as in seating.
     start_at: str = db.Column(db.String(255), nullable=True)
-    slack_webhook_url: str = db.Column(db.String(1024), nullable=True)
 
     @property
     def display_name(self) -> str:

@@ -100,15 +100,3 @@ def create_course_list(app: flask.Flask):
         db.session.add(Course(canvas_id=canvas_id, key=key, name=name))
         db.session.commit()
         click.echo(f"Linked Canvas course {canvas_id} to '{key}' as {name}.")
-
-    @app.cli.command("set-slack-webhook")
-    @click.argument("canvas_id", type=int)
-    @click.argument("url")
-    def set_slack_webhook(canvas_id, url):
-        """Set the Slack incoming webhook URL for CANVAS_ID."""
-        course = Course.query.filter_by(canvas_id=canvas_id).one_or_none()
-        if course is None:
-            raise click.ClickException("That Canvas course isn't set up.")
-        course.slack_webhook_url = url
-        db.session.commit()
-        click.echo(f"Updated the Slack webhook for {course.display_name}.")
