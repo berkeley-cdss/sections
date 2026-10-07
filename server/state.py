@@ -368,7 +368,13 @@ def create_state_client(app: flask.Flask):
     @api
     @login_required
     def leave_all_sections():
-        if not get_config().can_students_change:
+        config = get_config()
+        can_change = {
+            "Lab": config.can_students_change_lab,
+            "Discussion": config.can_students_change_disc,
+            "Tutoring": config.can_students_change_tutoring,
+        }
+        if not all(can_change.get(s.name, True) for s in current_user.sections):
             raise Failure("Students cannot remove themselves from sections!")
 
         current_user.sections = []
