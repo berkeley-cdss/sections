@@ -113,7 +113,7 @@ def create_login_client(app: flask.Flask):
         # The course pages' API calls expect a 401; pages go to the login page.
         if "/api/" in request.path:
             abort(401)
-        return redirect(url_for("login", next=request.full_path))
+        return redirect(url_for("login", next=request.full_path.rstrip("?")))
 
     # Same routes as seating.
     @app.route("/login/")
