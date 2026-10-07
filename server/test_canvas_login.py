@@ -6,9 +6,9 @@ from canvasapi.exceptions import InvalidAccessToken
 from flask import Flask, g, session
 from sqlalchemy.exc import NoResultFound
 
-from courses import create_course_list
+from offerings import create_offering_pages
 from login import complete_login, create_login_client
-from models import Account, Course, Section, User, db
+from models import Account, Offering, Section, User, db
 from state import create_state_client
 
 # Course 101 was moved from the monorepo, so its rows use the old key "cs61a".
@@ -32,15 +32,15 @@ class CanvasLoginTests(unittest.TestCase):
         db.init_app(self.app)
         create_state_client(self.app)
         create_login_client(self.app)
-        create_course_list(self.app)
+        create_offering_pages(self.app)
         self.context = self.app.app_context()
         self.context.push()
         db.create_all()
 
         db.session.add_all([
             # Linked from the monorepo: no Canvas details until a member signs in.
-            Course(canvas_id=CS61A, key="cs61a", name="CS 61A"),
-            Course(canvas_id=DATA8, key=str(DATA8), name="DATA 8 - LEC 001", code="DATA 8",
+            Offering(canvas_id=CS61A, key="cs61a", name="CS 61A"),
+            Offering(canvas_id=DATA8, key=str(DATA8), name="DATA 8 - LEC 001", code="DATA 8",
                    start_at="2026-08-19T07:00:00Z"),
         ])
         self.staff_account = Account(canvas_id="1", email="staff@test", name="Staff", canvas_courses={
@@ -88,7 +88,7 @@ class CanvasLoginTests(unittest.TestCase):
         # setUp keeps an app context open for database access, and Flask reuses
         # it for test requests, so per-request values on g would otherwise leak
         # between requests. In production each request gets a fresh context.
-        for key in ("course", "_login_user"):
+        for key in ("offering", "_login_user"):
             g.pop(key, None)
 
     def api(self, method, canvas_course_id=CS61A, **args):
@@ -255,7 +255,7 @@ class CanvasLoginTests(unittest.TestCase):
     def test_staff_import_offerings_and_students_cannot(self):
         self.sign_in(self.known_account)
         self.post("/offerings/new", data={"offerings": [str(UNSET_UP)]})
-        self.assertIsNone(Course.query.filter_by(canvas_id=UNSET_UP).one_or_none())
+        self.assertIsNone(Offering.query.filter_by(canvas_id=UNSET_UP).one_or_none())
 
         self.sign_in(self.staff_account)
         page = self.get("/offerings/new").get_data(as_text=True)
@@ -265,9 +265,9 @@ class CanvasLoginTests(unittest.TestCase):
         # Only courses the user is staff in can be imported.
         response = self.post("/offerings/new", data={"offerings": [str(UNSET_UP), str(DATA8), "999"]})
         self.assertTrue(response.headers["Location"].endswith("/offerings"))
-        course = Course.query.filter_by(canvas_id=UNSET_UP).one()
+        course = Offering.query.filter_by(canvas_id=UNSET_UP).one()
         self.assertEqual((course.key, course.code, course.start_month), (str(UNSET_UP), "CS 70", "2026-08"))
-        self.assertIsNone(Course.query.filter_by(canvas_id=999).one_or_none())
+        self.assertIsNone(Offering.query.filter_by(canvas_id=999).one_or_none())
         self.assertTrue(self.api("refresh_state", UNSET_UP).get_json()["success"])
 
     def test_offerings_page_matches_seating(self):
@@ -278,7 +278,7 @@ class CanvasLoginTests(unittest.TestCase):
         self.assertNotIn(f"/offerings/{DATA8}/", page)
         # The linked course picked up its Canvas details.
         self.assertIn("CS 61A - LEC 001", page)
-        self.assertEqual(Course.query.filter_by(canvas_id=CS61A).one().code, "CS 61A")
+        self.assertEqual(Offering.query.filter_by(canvas_id=CS61A).one().code, "CS 61A")
         self.assertEqual(self.api("refresh_state").get_json()["data"]["course"], "CS 61A")
 
         self.sign_in(self.known_account)

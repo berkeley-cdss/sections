@@ -20,7 +20,7 @@ Requires Python 3.14 and Node 20 (`mise install` picks both up from `mise.toml`)
 
 One deployment serves every bCourses course, with the same routes as seating. Users log in through Canvas OAuth (`/login/`, which returns to `/authorized/`), and `/offerings` lists their courses. Each course offering lives under `/offerings/<canvas course id>/`. Roles come from each Canvas enrollment at sign-in: Teachers and TAs are staff, and Teachers and Lead TAs are admins. Members of the `ADMIN_OVERRIDE_CANVAS_COURSE_ID` course are staff and admin everywhere. Someone added to a course after signing in needs to sign out and in again.
 
-Course staff set up Sections for a course with "Import courses from canvas" (`/offerings/new`). Courses moved from the monorepo store their data under an old key (`cs61a`, `data8`, ...); link each one to its Canvas course with `flask --app main link-course <canvas id> <key> "<name>"`, run from `server/` against that database.
+Course staff set up Sections for a course with "Import courses from canvas" (`/offerings/new`). Offerings moved from the monorepo store their data under an old key (`cs61a`, `data8`, ...); link each one to its Canvas course with `flask --app main link-offering <canvas id> <key> "<name>"`, run from `server/` against that database.
 
 To sign in locally, click `Sign in`. You will be sent to `localhost:3000/login/`; change the port to 8000 (`localhost:8000/login/`) and finish signing in with Canvas, then go back to `localhost:3000`. The course list (`/offerings`) is only served by the backend, at `localhost:8000/offerings`. A "template not found" error on port 8000 after signing in is expected, because the built frontend isn't served in development.
 

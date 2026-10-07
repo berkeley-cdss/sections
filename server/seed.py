@@ -5,7 +5,7 @@ from random import choice
 from zoneinfo import ZoneInfo
 
 from main import app
-from models import Course, Section, User, db, user_section
+from models import Offering, Section, User, db, user_section
 
 
 def seed(canvas_course_id: int):
@@ -14,8 +14,8 @@ def seed(canvas_course_id: int):
         return
     with app.app_context():
         db.create_all()
-        if Course.query.filter_by(canvas_id=canvas_course_id).one_or_none() is None:
-            db.session.add(Course(canvas_id=canvas_course_id, key=str(canvas_course_id), name="Demo 101"))
+        if Offering.query.filter_by(canvas_id=canvas_course_id).one_or_none() is None:
+            db.session.add(Offering(canvas_id=canvas_course_id, key=str(canvas_course_id), name="Demo 101"))
         course = str(canvas_course_id)
         pst = ZoneInfo("US/Pacific")
         discussions, labs = [], []

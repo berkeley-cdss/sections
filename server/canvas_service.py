@@ -1,7 +1,7 @@
 from canvasapi import Canvas
 from flask import current_app
 
-from course import get_canvas_course_id
+from offering import get_canvas_course_id
 
 # Requested at login. Must be a subset of the scopes on the sections Canvas developer key.
 SCOPES = [

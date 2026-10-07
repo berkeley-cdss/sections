@@ -19,7 +19,7 @@ from sqlalchemy import func
 from sqlalchemy.orm import joinedload, noload
 
 import canvas_service
-from course import COURSE_URL_PREFIX, get_course, get_course_name, load_course
+from offering import OFFERING_URL_PREFIX, get_course, get_course_name, load_offering
 from import_sheet import import_sections_from_url, import_enrollment_from_url
 
 from models import (
@@ -108,17 +108,17 @@ def add_student_helper(student: User, target_section: Section):
     db.session.add(student)
 
 def create_state_client(app: flask.Flask):
-    # Every course page and API lives under /offerings/<canvas course id>/.
-    bp = Blueprint("course", __name__, url_prefix=COURSE_URL_PREFIX)
+    # Every offering page and API lives under /offerings/<canvas course id>/.
+    bp = Blueprint("offering", __name__, url_prefix=OFFERING_URL_PREFIX)
 
     @bp.url_value_preprocessor
     def pull_course(endpoint, values):
-        load_course(values.pop("canvas_course_id"))
+        load_offering(values.pop("canvas_course_id"))
 
     @bp.url_defaults
     def add_course(endpoint, values):
-        if "course" in g:
-            values.setdefault("canvas_course_id", g.course.canvas_id)
+        if "offering" in g:
+            values.setdefault("canvas_course_id", g.offering.canvas_id)
 
     def api(handler):
         def wrapped():

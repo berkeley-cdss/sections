@@ -9,13 +9,13 @@ from __future__ import annotations
 import csv
 import argparse
 
-from course import load_course
+from offering import load_offering
 from main import app
 from import_sheet import import_enrollment, import_sections
 
 def main(canvas_course_id: int, import_type, file_path: str):
     with app.app_context():
-        load_course(canvas_course_id)
+        load_offering(canvas_course_id)
         with open(file_path, mode='r') as f:
             csvData = csv.reader(f)
 

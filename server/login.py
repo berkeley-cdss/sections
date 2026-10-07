@@ -8,7 +8,7 @@ from flask_login import LoginManager, login_user, logout_user
 from markupsafe import escape
 
 import canvas_service
-from course import current_course, get_course, in_course
+from offering import current_offering, get_course, in_offering
 from models import Account, User, db
 
 AFTER_LOGIN_KEY = "after_login"
@@ -58,7 +58,7 @@ def course_user(account: Account):
     Staff and admin flags follow the account's Canvas roles from its last
     sign-in. Returns None if the account isn't enrolled in the course.
     """
-    roles = account.roles_in(current_course().canvas_id)
+    roles = account.roles_in(current_offering().canvas_id)
     if roles is None:
         return None
     is_staff, is_admin = roles
@@ -100,7 +100,7 @@ def create_login_client(app: flask.Flask):
     def load_user(session_id):
         account_id = Account.parse_session_id(session_id)
         account = db.session.get(Account, account_id) if account_id else None
-        if account is None or not in_course():
+        if account is None or not in_offering():
             return account
         user = course_user(account)
         if user is None:

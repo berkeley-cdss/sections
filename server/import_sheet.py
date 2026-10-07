@@ -5,7 +5,7 @@ from typing import List, Iterator
 
 from zoneinfo import ZoneInfo
 
-from course import get_course
+from offering import get_course
 from google_sheets import read_spreadsheet
 from dataclasses import asdict, dataclass, field, fields
 from models import Failure, Section, User, db, user_section

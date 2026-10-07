@@ -1,3 +1,5 @@
+/* Copied from seating (server/static/css/flash.css) so the two apps look the same; keep them in sync. */
+
 .flash-messages {
   position: fixed;
   top: 20px;

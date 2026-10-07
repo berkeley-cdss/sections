@@ -324,14 +324,16 @@ class CourseConfig(db.Model):
         }
 
 
-class Course(db.Model):
-    """A bCourses course that has been set up in this app."""
+class Offering(db.Model):
+    """One semester's bCourses course that has been set up in this app, like
+    seating's Offering."""
 
+    __tablename__ = "offerings"
     id: int = db.Column(db.Integer, primary_key=True)
     canvas_id: int = db.Column(db.Integer, unique=True, index=True, nullable=False)
-    # The value of the `course` column on every other table. Courses set up in
-    # this app use str(canvas_id); courses moved from the monorepo keep their old
-    # key (e.g. "cs61a") so their existing rows don't need rewriting.
+    # The value of the `course` column on every other table. Offerings set up in
+    # this app use str(canvas_id); offerings moved from the monorepo keep their
+    # old key (e.g. "cs61a") so their existing rows don't need rewriting.
     key: str = db.Column(db.String(255), unique=True, nullable=False)
     # Canvas course name (e.g. "COMPSCI 61A - LEC 001") and code (e.g. "COMPSCI 61A").
     name: str = db.Column(db.String(255), nullable=False)
@@ -346,6 +348,12 @@ class Course(db.Model):
     @property
     def start_month(self) -> str:
         return (self.start_at or "")[:7]
+
+    def __str__(self):
+        return f"{self.start_month} | {self.code} | {self.name}"
+
+    def __repr__(self):
+        return f"<Offering {self.name}>"
 
 
 class Account(db.Model, UserMixin):
