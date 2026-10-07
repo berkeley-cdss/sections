@@ -15,7 +15,7 @@ COURSE_URL_PREFIX = "/offerings/<int:canvas_course_id>"
 def load_course(canvas_course_id: int):
     course = Course.query.filter_by(canvas_id=canvas_course_id).one_or_none()
     if course is None:
-        abort(404, "Sections isn't set up for this course yet. Ask your course staff.")
+        abort(404, "Sections isn't set up for this course yet. If this is unexpected, ask your course staff.")
     g.course = course
 
 
