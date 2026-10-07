@@ -14,6 +14,7 @@ import LabPage from "./LabPage";
 import DiscPage from "./DiscPage";
 import TutoringPage from "./TutoringPage";
 import AdminPage from "./AdminPage";
+import COURSE_BASE from "./coursePath";
 import HistoryPage from "./HistoryPage";
 import MainPage from "./MainPage";
 
@@ -81,10 +82,10 @@ export default function App(): React.Node {
     );
   }
 
-  const is61A = state.course === "CS 61A";
+  const is61A = /\b61A\b/.test(state.course);
 
   return (
-    <Router>
+    <Router basename={COURSE_BASE}>
       <Navbar bg="info" variant="dark" expand="md">
         <Link to="/">
           <Navbar.Brand>
@@ -125,7 +126,8 @@ export default function App(): React.Node {
           <Nav className="mr-sm-2">
             {state.currentUser != null ? (
               <NavDropdown title={state.currentUser.name} active>
-                <NavDropdown.Item href="/oauth/logout">
+                <NavDropdown.Item href="/offerings">All courses</NavDropdown.Item>
+                <NavDropdown.Item href="/logout/">
                   Log out
                 </NavDropdown.Item>
               </NavDropdown>

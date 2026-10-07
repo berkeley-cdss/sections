@@ -1,21 +1,40 @@
 """Which course the current request belongs to.
 
-For now each deployment serves the single course named by CANVAS_COURSE_ID.
-Multi-course support will read the course from the URL instead, without
-changing these function signatures, so callers stay the same.
+Course pages and APIs live under /offerings/<canvas course id>/ (see state.py);
+load_course resolves that ID to a Course row for the rest of the request.
 """
 
-from flask import current_app
+from flask import abort, g
+
+from models import Course
+
+# Matches seating's offering URLs.
+COURSE_URL_PREFIX = "/offerings/<int:canvas_course_id>"
+
+
+def load_course(canvas_course_id: int):
+    course = Course.query.filter_by(canvas_id=canvas_course_id).one_or_none()
+    if course is None:
+        abort(404, "Sections isn't set up for this course yet. Ask your course staff.")
+    g.course = course
+
+
+def current_course() -> Course:
+    return g.course
+
+
+def in_course() -> bool:
+    return "course" in g
 
 
 def get_canvas_course_id() -> int:
-    return current_app.config["CANVAS_COURSE_ID"]
+    return g.course.canvas_id
 
 
 def get_course() -> str:
     """The key stored in each row's ``course`` column."""
-    return current_app.config.get("COURSE_KEY") or str(get_canvas_course_id())
+    return g.course.key
 
 
-def format_coursecode(course: str) -> str:
-    return current_app.config.get("COURSE_NAME") or course
+def get_course_name() -> str:
+    return g.course.display_name

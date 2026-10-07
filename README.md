@@ -18,9 +18,11 @@ Requires Python 3.14 and Node 20 (`mise install` picks both up from `mise.toml`)
 
 ## Authentication
 
-Users sign in through Canvas OAuth (`/oauth/canvas_login`). Their role comes from their enrollment in the course named by `CANVAS_COURSE_ID`: Teachers and TAs are staff, and Teachers and Lead TAs are admins.
+One deployment serves every bCourses course, with the same routes as seating. Users log in through Canvas OAuth (`/login/`, which returns to `/authorized/`), and `/offerings` lists their courses. Each course lives under `/offerings/<canvas course id>/`. Roles come from each Canvas enrollment at sign-in: Teachers and TAs are staff, and Teachers and Lead TAs are admins. Members of the `ADMIN_OVERRIDE_CANVAS_COURSE_ID` course are staff and admin everywhere. Someone added to a course after signing in needs to sign out and in again.
 
-To sign in locally, click `Sign in`. You will be sent to `localhost:3000/oauth/canvas_login`; change the port to 8000 (`localhost:8000/oauth/canvas_login`) and finish signing in with Canvas, then go back to `localhost:3000`. A "template not found" error on port 8000 after signing in is expected, because the built frontend isn't served in development.
+Course staff set up Sections for a course with "Import courses from canvas" (`/offerings/new`). Courses moved from the monorepo store their data under an old key (`cs61a`, `data8`, ...); link each one to its Canvas course with `flask --app main link-course <canvas id> <key> "<name>"`, run from `server/` against that database. Set a course's Slack webhook with `flask --app main set-slack-webhook <canvas id> <url>`.
+
+To sign in locally, click `Sign in`. You will be sent to `localhost:3000/login/`; change the port to 8000 (`localhost:8000/login/`) and finish signing in with Canvas, then go back to `localhost:3000`. The course list (`/offerings`) is only served by the backend, at `localhost:8000/offerings`. A "template not found" error on port 8000 after signing in is expected, because the built frontend isn't served in development.
 
 ### About the Sandbox
 
@@ -37,15 +39,16 @@ bCourses API keys have strict scope and permissions. bCourses API keys should on
 ## Import Test Sections Locally
 
 1. Start the server and front end.
-2. Navigate to the `server` directory and run the following to import example sections and enrollment:
+2. Set up your sandbox course, either by signing in and using "Import courses from canvas" on `localhost:8000/offerings`, or with `python3 seed.py 157` from `server/` (157 is Mango 101 on the sandbox; this also adds demo sections).
+3. From the `server` directory, import example sections and enrollment into that course:
 
 ```
-python3 import_locally.py --type sections --file test_csvs/test_sections.csv
-python3 import_locally.py --type enrollment --file test_csvs/disc_enrollment.csv
-python3 import_locally.py --type enrollment --file test_csvs/lab_enrollment.csv
+python3 import_locally.py --course 157 --type sections --file test_csvs/test_sections.csv
+python3 import_locally.py --course 157 --type enrollment --file test_csvs/disc_enrollment.csv
+python3 import_locally.py --course 157 --type enrollment --file test_csvs/lab_enrollment.csv
 ```
 
-3. Reload your localhost page, you should see the example sections locally.
+4. Open `localhost:3000/offerings/157/`; you should see the example sections.
 
 ## Import Sections from GCP
 1. Download the sections database to obtain a `.sql` file. Relevant Links [1](https://cloud.google.com/sql/docs/mysql/import-export/import-export-sql) and [2](https://cloud.google.com/storage/docs/downloading-objects).

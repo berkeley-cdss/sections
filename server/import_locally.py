@@ -9,11 +9,13 @@ from __future__ import annotations
 import csv
 import argparse
 
+from course import load_course
 from main import app
 from import_sheet import import_enrollment, import_sections
 
-def main(import_type, file_path: str):
+def main(canvas_course_id: int, import_type, file_path: str):
     with app.app_context():
+        load_course(canvas_course_id)
         with open(file_path, mode='r') as f:
             csvData = csv.reader(f)
 
@@ -28,6 +30,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--type", required=True, type=str, choices=["sections", "enrollment"])
     parser.add_argument("--file", required=True, type=str)
+    parser.add_argument("--course", required=True, type=int, help="Canvas course id, set up first (e.g. via seed.py)")
     
     args = parser.parse_args()
-    main(args.type, args.file)
+    main(args.course, args.type, args.file)

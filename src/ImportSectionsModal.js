@@ -6,6 +6,7 @@ import Modal from "react-bootstrap/Modal";
 import FormControl from "react-bootstrap/FormControl";
 import { useContext, useState } from "react";
 import MessageContext from "./MessageContext";
+import StateContext from "./StateContext";
 import useAPI from "./useStateAPI";
 
 type Props = {
@@ -17,6 +18,7 @@ export default function ImportSectionsModal({ show, onClose }: Props) {
   const [sheet, setSheet] = useState("");
 
   const { pushMessage } = useContext(MessageContext);
+  const state = useContext(StateContext);
   const importSectionsFromSheet = useAPI("import_sections_from_sheet", () =>
     pushMessage("Import successful!")
   );
@@ -36,14 +38,15 @@ export default function ImportSectionsModal({ show, onClose }: Props) {
         </a>{" "}
         as an example.{" "}
         <p>
-          Make sure to make it visible to anyone with the link, or share it
-          directly with{" "}
-          <a
-            href="mailto:secure-links@ok-server.iam.gserviceaccount.com"
-            target="__blank"
-          >
-            secure-links@ok-server.iam.gserviceaccount.com
-          </a>
+          Make sure to make it visible to anyone with the link
+          {state.serviceAccountEmail != null ? (
+            <>
+              , or share it directly with{" "}
+              <a href={`mailto:${state.serviceAccountEmail}`} target="__blank">
+                {state.serviceAccountEmail}
+              </a>
+            </>
+          ) : null}
           .
         </p>
         <FormControl

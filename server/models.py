@@ -324,5 +324,69 @@ class CourseConfig(db.Model):
         }
 
 
+class Course(db.Model):
+    """A bCourses course that has been set up in this app."""
+
+    id: int = db.Column(db.Integer, primary_key=True)
+    canvas_id: int = db.Column(db.Integer, unique=True, index=True, nullable=False)
+    # The value of the `course` column on every other table. Courses set up in
+    # this app use str(canvas_id); courses moved from the monorepo keep their old
+    # key (e.g. "cs61a") so their existing rows don't need rewriting.
+    key: str = db.Column(db.String(255), unique=True, nullable=False)
+    # Canvas course name (e.g. "COMPSCI 61A - LEC 001") and code (e.g. "COMPSCI 61A").
+    name: str = db.Column(db.String(255), nullable=False)
+    code: str = db.Column(db.String(255), nullable=True)
+    # ISO 8601 start of the course's term, as in seating.
+    start_at: str = db.Column(db.String(255), nullable=True)
+    slack_webhook_url: str = db.Column(db.String(1024), nullable=True)
+
+    @property
+    def display_name(self) -> str:
+        return self.code or self.name
+
+    @property
+    def start_month(self) -> str:
+        return (self.start_at or "")[:7]
+
+
+class Account(db.Model, UserMixin):
+    """Someone signed in with Canvas, across all of their courses.
+
+    Flask-Login keeps the account's id in the session. Inside a course, the
+    login manager resolves it to that course's User row (see login.py).
+    """
+
+    id: int = db.Column(db.Integer, primary_key=True)
+    canvas_id: str = db.Column(db.String(255), unique=True, index=True, nullable=False)
+    email: str = db.Column(db.String(255), index=True, nullable=False)
+    name: str = db.Column(db.String(255), nullable=False)
+    # Staff and admin in every course (member of ADMIN_OVERRIDE_CANVAS_COURSE_ID).
+    is_global_admin: bool = db.Column(db.Boolean, nullable=False, default=False)
+    # Active Canvas courses at last sign-in, keyed by str(canvas course id):
+    # {"name", "code", "start_at", "is_staff", "is_admin", "is_student"}.
+    canvas_courses: dict = db.Column(db.JSON, nullable=False, default=dict)
+
+    # Session ids are prefixed so cookies from before accounts existed, which
+    # hold a per-course User id, can't be mistaken for an account id.
+    SESSION_ID_PREFIX = "account-"
+
+    def get_id(self):
+        return f"{self.SESSION_ID_PREFIX}{self.id}"
+
+    @classmethod
+    def parse_session_id(cls, session_id: str):
+        prefix, _, account_id = session_id.partition(cls.SESSION_ID_PREFIX)
+        return int(account_id) if not prefix and account_id.isdigit() else None
+
+    def roles_in(self, canvas_course_id: int):
+        """``(is_staff, is_admin)`` in the course, or None if not enrolled."""
+        if self.is_global_admin:
+            return True, True
+        info = self.canvas_courses.get(str(canvas_course_id))
+        if info is None or not (info["is_staff"] or info["is_student"]):
+            return None
+        return info["is_staff"], info["is_admin"]
+
+
 class Failure(Exception):
     pass

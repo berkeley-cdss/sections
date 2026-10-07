@@ -25,6 +25,7 @@ export default React.createContext<{
     message: "",
   },
   currentUser: null,
+  serviceAccountEmail: null,
   sections: [],
   history: [],
   taughtSections: [],

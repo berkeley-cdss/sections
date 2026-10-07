@@ -71,15 +71,10 @@ def load_config(app: flask.Flask):
         CANVAS_SERVER_URL=canvas_server_url.rstrip("/") + "/",
         CANVAS_CLIENT_ID=_require("CANVAS_CLIENT_ID"),
         CANVAS_CLIENT_SECRET=_require("CANVAS_CLIENT_SECRET"),
-        # Temporary: one deployment serves one course until multi-course routing lands.
-        CANVAS_COURSE_ID=int(_require("CANVAS_COURSE_ID")),
-        # Value of the `course` column for this course. Defaults to CANVAS_COURSE_ID;
-        # set it to read rows moved from the monorepo, which use keys like "cs61a".
-        COURSE_KEY=os.getenv("COURSE_KEY") or None,
-        COURSE_NAME=os.getenv("COURSE_NAME"),
         # Members of this bCourses course are staff and admin in every course.
         ADMIN_OVERRIDE_CANVAS_COURSE_ID=int(admin_override) if admin_override else None,
-        SLACK_WEBHOOK_URL=os.getenv("SLACK_WEBHOOK_URL"),
+        # Shown to staff as the account to share import spreadsheets with.
+        GOOGLE_SERVICE_ACCOUNT_EMAIL=os.getenv("GOOGLE_SERVICE_ACCOUNT_EMAIL"),
         # Shared secret for the /api/sudo/* and export_attendance_secret endpoints.
         API_SECRET=os.getenv("API_SECRET"),
         PERMANENT_SESSION_LIFETIME=7200,

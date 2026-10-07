@@ -13,7 +13,8 @@ SCOPES = [
     "url:GET|/api/v1/accounts/:account_id/users",
 ]
 
-STAFF_ENROLLMENT_TYPES = ("TaEnrollment", "TeacherEnrollment")
+# Enrollment types as the user courses endpoint reports them.
+STAFF_ENROLLMENT_TYPES = {"ta", "teacher"}
 
 
 def _client(access_token: str) -> Canvas:
@@ -25,36 +26,40 @@ def get_profile(user_id, access_token: str) -> dict:
     return _client(access_token).get_user(user_id).get_profile()
 
 
-def in_admin_override_course(user_id, access_token: str) -> bool:
-    override_id = current_app.config.get("ADMIN_OVERRIDE_CANVAS_COURSE_ID")
-    if override_id is None:
-        return False
-    courses = _client(access_token).get_user(user_id).get_courses(
-        enrollment_state="active", per_page=100
-    )
-    return any(c.id == override_id for c in courses)
+def _start_at(course):
+    """The term's start, else the course's own start, else its creation, like seating."""
+    term = getattr(course, "term", None) or {}
+    return term.get("start_at") or getattr(course, "start_at", None) or getattr(course, "created_at", None)
 
 
-def get_course_roles(user_id, access_token: str) -> tuple[bool, bool]:
-    """Return ``(is_staff, is_admin)`` for the user in this app's course.
+def get_user_courses(user_id, access_token: str) -> dict:
+    """The user's active Canvas courses and their role in each.
 
-    Staff are TAs and Teachers; admins are Teachers and Lead TAs. Raises
-    ``canvasapi.exceptions.Forbidden`` if the user can't see the course.
+    Returns ``{str(course id): {"name", "code", "start_at", "is_staff", "is_admin",
+    "is_student"}}``. Staff are TAs and Teachers; admins are Teachers and Lead TAs.
     """
-    if in_admin_override_course(user_id, access_token):
-        return True, True
-    course = _client(access_token).get_course(get_canvas_course_id())
-    is_staff = is_admin = False
-    for e in course.get_enrollments(user_id=str(user_id)):
-        if e.type in STAFF_ENROLLMENT_TYPES:
-            is_staff = True
-        if e.type == "TeacherEnrollment" or e.role == "Lead TA":
-            is_admin = True
-    return is_staff, is_admin
+    courses = {}
+    for c in _client(access_token).get_user(user_id).get_courses(
+        enrollment_state="active", include=["term"], per_page=100
+    ):
+        enrollments = getattr(c, "enrollments", None) or []
+        if not enrollments or not hasattr(c, "course_code"):
+            continue  # courses the user can't see, or restricted by date
+        types = {e["type"] for e in enrollments}
+        roles = {e.get("role") for e in enrollments}
+        courses[str(c.id)] = {
+            "name": c.name,
+            "code": c.course_code,
+            "start_at": _start_at(c),
+            "is_staff": bool(types & STAFF_ENROLLMENT_TYPES),
+            "is_admin": "teacher" in types or "Lead TA" in roles,
+            "is_student": "student" in types,
+        }
+    return courses
 
 
 def get_student_from_email(email: str, access_token: str):
-    """Name of the student in this app's course with login ``email``, or None."""
+    """Name of the student in the current course with login ``email``, or None."""
     course = _client(access_token).get_course(get_canvas_course_id())
     for enrollment in course.get_enrollments(type=["StudentEnrollment"]):
         if enrollment.user["login_id"] == email:
