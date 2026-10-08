@@ -68,7 +68,7 @@ jobs:
           flags: '--allow-unauthenticated --service-account=sections-app@staging-cdss-web-apps.iam.gserviceaccount.com --max-instances=3'
           env_vars: |
             FLASK_ENV=staging
-            CANVAS_SERVER_URL=https://bcourses.berkeley.edu/
+            CANVAS_SERVER_URL=https://ucberkeley.test.instructure.com/
             ADMIN_OVERRIDE_CANVAS_COURSE_ID=1549197
             GOOGLE_SERVICE_ACCOUNT_EMAIL=sections-app@staging-cdss-web-apps.iam.gserviceaccount.com
             # Cloud SQL IAM database auth as the service's own account; no password.
