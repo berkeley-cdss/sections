@@ -3,7 +3,7 @@
 
 ## Local Development Set Up
 
-Requires Python 3.14 and Node 20 (`mise install` picks both up from `mise.toml`).
+Requires Python 3.14 and Node 24 (`mise install` picks both up from `mise.toml`). The frontend is React 19 and TypeScript, built with Vite.
 
 1. Copy `.env.example` to `.env` and fill in the Canvas sandbox `CANVAS_CLIENT_ID` and `CANVAS_CLIENT_SECRET` (ask a maintainer). Never commit `.env`.
 2. Create a virtual environment and install the server dependencies:
@@ -13,7 +13,7 @@ Requires Python 3.14 and Node 20 (`mise install` picks both up from `mise.toml`)
    pip install -r server/requirements.txt
    ```
 3. Install the frontend dependencies with `yarn install`.
-4. Run both with `yarn run dev`, or separately: the backend with `python3 main.py` from `server/` (port 8000) and the frontend with `yarn start` (port 3000, proxies API calls to 8000).
+4. Run both with `yarn dev`, or separately: the backend with `python3 main.py` from `server/` (port 8000) and the frontend with `yarn start` (the Vite dev server on port 3000, which forwards API calls, the login routes and `/offerings` to port 8000).
 5. Run the backend tests from the repository root with `python -m unittest discover -s server -p "test_*.py"`.
 
 ## Authentication
@@ -22,7 +22,7 @@ One deployment serves every bCourses course, with the same routes as seating. Us
 
 Course staff set up Sections for a course with "Import courses from canvas" (`/offerings/new`). Offerings moved from the monorepo store their data under an old key (`cs61a`, `data8`, ...); link each one to its Canvas course with `flask --app main link-offering <canvas id> <key> "<name>"`, run from `server/` against that database.
 
-To sign in locally, click `Sign in`. You will be sent to `localhost:3000/login/`; change the port to 8000 (`localhost:8000/login/`) and finish signing in with Canvas, then go back to `localhost:3000`. The course list (`/offerings`) is only served by the backend, at `localhost:8000/offerings`. A "template not found" error on port 8000 after signing in is expected, because the built frontend isn't served in development.
+To sign in locally, open `localhost:3000/offerings` and log in. This works on port 3000 if the sandbox developer key allows `http://localhost:3000/authorized/` as a redirect URI. Otherwise, log in at `localhost:8000/login/` instead, then go back to `localhost:3000`. A "template not found" error for course pages on port 8000 is expected, because the built frontend isn't served in development.
 
 ### About the Sandbox
 
@@ -39,7 +39,7 @@ bCourses API keys have strict scope and permissions. bCourses API keys should on
 ## Import Test Sections Locally
 
 1. Start the server and front end.
-2. Set up your sandbox course, either by signing in and using "Import courses from canvas" on `localhost:8000/offerings`, or with `python3 seed.py 157` from `server/` (157 is Mango 101 on the sandbox; this also adds demo sections).
+2. Set up your sandbox course, either by signing in and using "Import courses from canvas" on `localhost:3000/offerings`, or with `python3 seed.py 157` from `server/` (157 is Mango 101 on the sandbox; this also adds demo sections).
 3. From the `server` directory, import example sections and enrollment into that course:
 
 ```
@@ -72,7 +72,7 @@ curl -X POST \
 ```
 
 ## Notes
-1. Use `yarn run flow` for typechecking.
+1. Use `yarn typecheck` (TypeScript) and `yarn lint` (ESLint); CI runs both.
 2. If you'd to see debugging logs while the server is up and running, the usual `print` statements will not work. Instead, a method that currently works is described in this [commit](https://github.com/Cal-CS-61A-Staff/berkeley-cs61a/commit/0e75b8798543c0edd68cc02d1d9c1a9389105087).
 3. If you run the app locally and sign in, you may need to update the local database to give yourself appropriate access levels to test the admin, staff, and student views. To assign yourself staff and admin access run the following (substituting your own email) *after* having already logged in:
 
