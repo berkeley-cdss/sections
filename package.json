@@ -1,51 +1,45 @@
 {
   "name": "sections",
   "license": "MIT",
-  "proxy": "http://localhost:8000",
-  "dependencies": {
-    "bootstrap": "^4.5.2",
-    "bootstrap4-toggle": "^3.6.1",
-    "concurrently": "^5.1.0",
-    "eslint-config-airbnb": "^17.1.1",
-    "eslint-config-prettier": "^6.11.0",
-    "eslint-plugin-flowtype": "^8.0.3",
-    "flow-bin": "^0.131.0",
-    "jquery": "^3.5.1",
-    "levenary": "^1.1.1",
-    "moment": "^2.27.0",
-    "moment-timezone": "^0.5.31",
-    "nodemon": "^2.0.4",
-    "prettier": "2.0.5",
-    "react": "^16.13.1",
-    "react-bootstrap": "^1.3.0",
-    "react-bootstrap-icons": "^1.11.5",
-    "react-dom": "^16.13.1",
-    "react-markdown": "^5.0.3",
-    "react-router-dom": "^5.2.0",
-    "react-scripts": "^5.0.0",
-    "styled-components": "^5.1.1"
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=24"
   },
   "scripts": {
-    "start": "react-scripts start",
-    "build": "yarn run react-scripts build && rm -rf deploy && mkdir deploy && cp -a server/. deploy/ && mv build deploy/static",
-    "test": "react-scripts test",
-    "eject": "react-scripts eject",
-    "dev": "concurrently -n 'server, client' \"nodemon --exec python3 server/main.py\" \"yarn start\"",
-    "flow": "flow"
+    "start": "vite",
+    "dev": "concurrently -n 'server,client' \"python3 server/main.py\" \"vite\"",
+    "build": "vite build",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint .",
+    "format": "prettier --write src"
   },
-  "eslintConfig": {
-    "extends": "react-app"
+  "dependencies": {
+    "bootstrap": "^5.3.8",
+    "moment": "^2.31.0",
+    "moment-timezone": "^0.6.5",
+    "react": "^19.3.0",
+    "react-bootstrap": "^2.10.10",
+    "react-bootstrap-icons": "^1.11.6",
+    "react-dom": "^19.3.0",
+    "react-markdown": "^10.1.0",
+    "react-router-dom": "^7.18.4",
+    "styled-components": "^6.5.3"
   },
-  "browserslist": {
-    "production": [
-      ">0.2%",
-      "not dead",
-      "not op_mini all"
-    ],
-    "development": [
-      "last 1 chrome version",
-      "last 1 firefox version",
-      "last 1 safari version"
-    ]
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "@vitejs/plugin-react": "^6.1.2",
+    "concurrently": "^10.0.5",
+    "eslint": "^10.12.0",
+    "eslint-config-prettier": "^10.1.8",
+    "eslint-plugin-react-hooks": "^7.1.1",
+    "eslint-plugin-react-refresh": "^0.5.7",
+    "globals": "^17.13.0",
+    "prettier": "^3.9.9",
+    "typescript": "~6.0.3",
+    "typescript-eslint": "^8.71.1",
+    "vite": "^8.3.3"
   }
 }

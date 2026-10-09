@@ -17,3 +17,25 @@ code {
   flex-grow: 1;
   margin: 0 12px;
 }
+
+/* Keep Bootstrap 4's look after the Bootstrap 5 upgrade. */
+
+/* Bootstrap 5's "info" is a much brighter cyan; this is Bootstrap 4's. */
+.navbar-sections {
+  background-color: #17a2b8;
+}
+
+/* Bootstrap 5 underlines links by default; Bootstrap 4 only did on hover. */
+a {
+  text-decoration: none;
+}
+a:hover {
+  text-decoration: underline;
+}
+.btn:hover,
+.nav-link:hover,
+.navbar-brand:hover,
+.dropdown-item:hover,
+.list-group-item:hover {
+  text-decoration: none;
+}

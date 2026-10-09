@@ -5,19 +5,19 @@
 # ---------------------------------------------------------------------------
 # Frontend build stage
 #
-# Builds the React app; Flask serves the output as its static and template
-# folder (server/static).
+# Type-checks and builds the React app with Vite; Flask serves the output as
+# its static and template folder (server/static).
 # ---------------------------------------------------------------------------
-FROM node:20-slim AS frontend
+FROM node:24-slim AS frontend
 
 WORKDIR /build
 COPY package.json yarn.lock ./
 RUN yarn install --frozen-lockfile
 
-COPY .eslintrc.js .flowconfig .prettierrc.json ./
+COPY index.html tsconfig.json vite.config.ts ./
 COPY public ./public
 COPY src ./src
-RUN yarn react-scripts build
+RUN yarn typecheck && yarn build
 
 # ---------------------------------------------------------------------------
 # Python build stage

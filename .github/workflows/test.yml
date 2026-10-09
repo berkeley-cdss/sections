@@ -30,11 +30,13 @@ jobs:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v7
         with:
-          node-version: "20"
+          node-version: "24"
           cache: yarn
       - name: Install dependencies
         run: yarn install --frozen-lockfile
+      - name: Type check
+        run: yarn typecheck
+      - name: Lint
+        run: yarn lint
       - name: Build
-        # react-scripts fails the build on lint warnings when CI=true; the
-        # existing warnings are reported but don't block, matching the Docker build.
-        run: CI=false yarn react-scripts build
+        run: yarn build
