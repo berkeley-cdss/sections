@@ -8,7 +8,7 @@ from zoneinfo import ZoneInfo
 from offering import get_course
 from google_sheets import read_spreadsheet
 from dataclasses import asdict, dataclass, field, fields
-from models import Failure, Section, User, db, user_section
+from models import Failure, Section, db, find_or_add_person, offering_member, user_section
 
 # Sample Spreadsheet Link: https://docs.google.com/spreadsheets/d/1WL7gXiBxPe6aUFBKfEOVS6iY27ITy9mARupLoJX-ouE/edit?usp=sharing
 pst = ZoneInfo("US/Pacific")
@@ -95,16 +95,10 @@ def import_sections(data: Iterator):
             raise Failure(f"Unknown boolean value: {can_self_enroll}")
         can_self_enroll = can_self_enroll == "true"
 
-        staff = User.query.filter_by(
-            email=email,
-            course=get_course(),
-        ).one_or_none() or User(
-            email=email,
-            name=name,
-            is_staff=True,
-            is_admin=False,
-            course=get_course(),
-        )
+        staff = offering_member(email=email)
+        if staff is None:
+            staff = find_or_add_person(email, name)
+            staff.set_role(get_course(), is_staff=True)
 
         section_type = row[header.type_index]
         location = row[header.location_index]
@@ -156,21 +150,14 @@ def import_enrollment(data: Iterator):
         start_time = parse_time_string(row[header.day_index], row[header.start_index])
         section_type = row[header.type_index]
 
-        student = User.query.filter_by(
-            email=student_email,
-            course=get_course()
-        ).one_or_none() or User(
-            email=student_email,
-            name=student_name,
-            is_staff=False,
-            is_admin=False,
-            course=get_course()
-        )
+        student = offering_member(email=student_email)
+        if student is None:
+            student = find_or_add_person(student_email, student_name)
+            student.set_role(get_course(), is_staff=False)
 
-        staff = User.query.filter_by(
-            email=staff_email,
-            course=get_course(),
-        ).one()
+        staff = offering_member(email=staff_email)
+        if staff is None:
+            raise Failure(f"Unable to import enrollment data for {student_email}! {staff_email} isn't on staff.")
 
         # Assumes that each section can be uniquely identified by the below parameters
         section = Section.query.filter_by(

@@ -31,6 +31,9 @@ from models import (
     Session,
     User,
     db,
+    find_or_add_person,
+    offering_member,
+    set_contains,
     user_section,
 )
 
@@ -95,11 +98,13 @@ def is_valid_api_secret(secret) -> bool:
 
 
 def add_student_helper(student: User, target_section: Section):
-    if len(set([s.name for s in student.sections])) != len(student.sections):
+    # Only the target's offering matters; the person may be in other offerings too.
+    sections = student.sections_in(target_section.course)
+    if len(set([s.name for s in sections])) != len(sections):
         raise Failure("Student has multiple sections of the same type")
 
     # If user is already in a section of the same type, remove it and add target section
-    for s in student.sections:
+    for s in sections:
         if s.name == target_section.name:
             student.sections.remove(s)
             break
@@ -144,7 +149,9 @@ def create_state_client(app: flask.Flask):
             if not is_valid_api_secret(secret):
                 abort(401)
 
-            user = User.query.filter_by(course=get_course(), email=email).one()
+            user = offering_member(email=email)
+            if user is None:
+                abort(404)
             # Act as this user for this request only, without touching the session.
             g._login_user = user
             try:
@@ -208,8 +215,8 @@ def create_state_client(app: flask.Flask):
 
         if current_user.is_authenticated:
             course = get_course()
-            enrolled_sections = list(current_user.sections)
-            taught_sections = list(current_user.sections_taught)
+            enrolled_sections = current_user.sections_in(course)
+            taught_sections = [s for s in current_user.sections_taught if s.course == course]
             current_section_ids = {section.id for section in enrolled_sections}
 
             counts_started_at = time.perf_counter()
@@ -316,23 +323,23 @@ def create_state_client(app: flask.Flask):
         # TODO: Really shouldn't be hard coded, but has to be with the code right now
         config = get_config()
         if target_section.name == "Discussion" and not config.can_students_join_disc:
-            if any(current_user.sections):
+            if any(current_user.sections_in(get_course())):
                 raise Failure("Students cannot change their enrolled discussion!")
             else:
                 raise Failure("Students cannot add themselves themselves to discussions!")
         if target_section.name == "Lab" and not config.can_students_join_lab:
-            if any(current_user.sections):
+            if any(current_user.sections_in(get_course())):
                 raise Failure("Students cannot change their enrolled lab!")
             else:
                 raise Failure("Students cannot add themselves themselves to labs!")
         if target_section.name == "Tutoring" and not config.can_students_join_tutoring:
-            if any(current_user.sections):
+            if any(current_user.sections_in(get_course())):
                 raise Failure("Students cannot change their enrolled tutorial!")
             else:
                 raise Failure("Students cannot add themselves themselves to tutorials!")
 
         # If student is already enrolled in a section of the same type/name (Lab/Disc/etc)
-        if any(map(lambda section: section.name == target_section.name, current_user.sections)):
+        if any(map(lambda section: section.name == target_section.name, current_user.sections_in(get_course()))):
             if target_section.name == "Discussion" and not config.can_students_change_disc:
                 raise Failure("Students cannot change their enrolled discussion!")
             if target_section.name == "Lab" and not config.can_students_change_lab:
@@ -390,10 +397,11 @@ def create_state_client(app: flask.Flask):
             "Discussion": config.can_students_change_disc,
             "Tutoring": config.can_students_change_tutoring,
         }
-        if not all(can_change.get(s.name, True) for s in current_user.sections):
+        course_sections = current_user.sections_in(get_course())
+        if not all(can_change.get(s.name, True) for s in course_sections):
             raise Failure("Students cannot remove themselves from sections!")
 
-        current_user.sections = []
+        current_user.sections = [s for s in current_user.sections if s not in course_sections]
 
         db.session.commit()
         return refresh_state()
@@ -520,9 +528,7 @@ def create_state_client(app: flask.Flask):
         session = Session.query.filter_by(id=session_id, course=get_course()).one()
         status = AttendanceStatus[status]
         for email in parse_emails(students):
-            student = User.query.filter_by(
-                email=email, course=get_course()
-            ).one_or_none()
+            student = offering_member(email=email)
             if student is None:
                 raise Failure(f"Student {email} is not enrolled")
             Attendance.query.filter_by(session_id=session_id, student=student).delete()
@@ -551,7 +557,9 @@ def create_state_client(app: flask.Flask):
     @staff_required
     def remove_student(student: str, section_id: str):
         section_id = int(section_id)
-        student = User.query.filter_by(email=student, course=get_course()).one()
+        student = offering_member(email=student)
+        if student is None:
+            raise Failure("That student is not enrolled in this course")
         section = Section.query.filter_by(id=section_id, course=get_course()).one()
         student.sections.remove(section)
         db.session.commit()
@@ -561,9 +569,10 @@ def create_state_client(app: flask.Flask):
     @admin_required
     def remove_students(students: str):
         for s in parse_emails(students):
-            student = User.query.filter_by(email=s, course=get_course()).one_or_none()
+            student = offering_member(email=s)
             if student:
-                student.sections = []
+                # Only this offering's sections; the person may be in others.
+                student.sections = [sec for sec in student.sections if sec.course != get_course()]
         db.session.commit()
         return refresh_state()
 
@@ -571,9 +580,12 @@ def create_state_client(app: flask.Flask):
     @admin_required
     def remove_students_from_tutoring(students: str):
         for s in parse_emails(students):
-            student = User.query.filter_by(email=s, course=get_course()).one_or_none()
+            student = offering_member(email=s)
             if student:
-                student.sections = [sec for sec in student.sections if sec.name != "Tutoring"]
+                student.sections = [
+                    sec for sec in student.sections
+                    if not (sec.course == get_course() and sec.name == "Tutoring")
+                ]
         db.session.commit()
         return refresh_state()
 
@@ -583,9 +595,10 @@ def create_state_client(app: flask.Flask):
         #this function is never called!! use add_students instead
         section_id = int(section_id)
         section = Section.query.filter_by(id=section_id, course=get_course()).one()
-        student = User.query.filter_by(email=email, course=get_course()).one_or_none()
+        student = offering_member(email=email)
         if student is None:
-            student = User(email=email, name=email, is_staff=False, is_admin=False, course=get_course())
+            student = find_or_add_person(email, email)
+            student.set_role(get_course(), is_staff=False)
 
         # for decoupling
         add_student_helper(student, section)
@@ -600,9 +613,7 @@ def create_state_client(app: flask.Flask):
         section = Section.query.filter_by(id=section_id, course=get_course()).one()
         access_token = session.get("canvas_access_token")
         for email in parse_emails(emails):
-            student = User.query.filter_by(
-                email=email, course=get_course()
-            ).one_or_none()
+            student = offering_member(email=email)
             if student is not None and student.is_staff:
                 raise Failure("Attempted to add staff: {student.name}")
             if student is None:
@@ -629,9 +640,8 @@ def create_state_client(app: flask.Flask):
 
                 if (not canvasname):
                     raise Failure("Could not find email that belongs to this class")
-                student = User(
-                    email=email, name=canvasname, is_staff=False, is_admin=False, course=get_course()
-                )
+                student = find_or_add_person(email, canvasname)
+                student.set_role(get_course(), is_staff=False)
             add_student_helper(student, section)
         db.session.commit()
         return fetch_section(section_id=section_id)
@@ -663,13 +673,14 @@ def create_state_client(app: flask.Flask):
         stringify = dumps
         attendances = dict()
         emails = set()
+        course = get_course()
         for user in (
-            User.query.filter_by(is_staff=False, course=get_course())
+            User.query.filter(set_contains(User.student_offerings, course))
             .options(joinedload(User.attendances).joinedload(Attendance.session))
             .all()
         ):
             emails.add(user.email)
-            for attendance in user.attendances:
+            for attendance in [a for a in user.attendances if a.course == course]:
                 try:
                     section_name = attendance.session.section.name
                 except AttributeError:
@@ -751,7 +762,7 @@ def create_state_client(app: flask.Flask):
     @staff_required
     def fetch_user(user_id: str):
         user_id = int(user_id)
-        user = User.query.filter_by(id=user_id, course=get_course()).one_or_none()
+        user = offering_member(id=user_id)
         if user is None:
             raise Failure(f"No user found with id {user_id}")
         return user.simple_json
@@ -759,7 +770,7 @@ def create_state_client(app: flask.Flask):
     @api
     @staff_required
     def get_userid(email: str):
-        user = User.query.filter_by(email=email, course=get_course()).one_or_none()
+        user = offering_member(email=email)
         if user is None:
             raise Failure(f"No user found with email {email}")
         return user.id
@@ -785,10 +796,12 @@ def create_state_client(app: flask.Flask):
         Attendance.query.filter_by(course=course).delete()
         Session.query.filter_by(course=course).delete()
 
-        for user in User.query.filter_by(course=course).all():
-            user.sections.clear()
-
-        User.query.filter_by(course=course).delete()
+        # Remove the offering's sections and everyone's assignments to them, but
+        # keep the people and their roles in the offering.
+        course_section_ids = [s.id for s in Section.query.filter_by(course=course)]
+        db.session.execute(
+            user_section.delete().where(user_section.c.section_id.in_(course_section_ids))
+        )
         Section.query.filter_by(course=course).delete()
         db.session.commit()
         return refresh_state()
@@ -797,16 +810,17 @@ def create_state_client(app: flask.Flask):
     @admin_required
     def fetch_to_drop():
         students = ""
+        course = get_course()
         for student in (
-            User.query.filter_by(is_staff=False, course=get_course())
-            .filter(User.sections.any())
+            User.query.filter(set_contains(User.student_offerings, course))
+            .filter(User.sections.any(Section.course == course))
             .all()
         ):
             tutoring_section = None
             absences = []
             excused = []
             if student:
-                for section in student.sections:
+                for section in student.sections_in(course):
                     if section.name == 'Tutoring':
                         tutoring_section = section
             if tutoring_section:
@@ -839,22 +853,16 @@ def create_state_client(app: flask.Flask):
     @api
     @admin_required
     def get_student_section_ids(email: str):
-        student = User.query.filter_by(
-            email= email,
-            course=get_course()
-        ).one_or_none()
+        student = offering_member(email=email)
         if (student is None):
             return {email: []}
-        section_ids = [section.id for section in student.sections]
+        section_ids = [section.id for section in student.sections_in(get_course())]
         return {email: section_ids}
 
     @api
     @admin_required
     def get_student_discussion_attendance(email:str):
-        student = User.query.filter_by(
-                    email = email,
-                    course=get_course()
-                ).one_or_none()
+        student = offering_member(email=email)
         discussion_present_days = []
         if student:
             attendances = (Attendance.query.join(Attendance.session).join(Session.section)
@@ -874,10 +882,7 @@ def create_state_client(app: flask.Flask):
     @api
     @admin_required
     def get_student_lab_attendance(email:str):
-        student = User.query.filter_by(
-                    email = email,
-                    course=get_course()
-                ).one_or_none()
+        student = offering_member(email=email)
         lab_present_days = []
         if student:
             attendances = (Attendance.query.join(Attendance.session).join(Session.section)
@@ -896,10 +901,7 @@ def create_state_client(app: flask.Flask):
     @api
     @admin_required
     def get_student_tutoring_attendance(email:str):
-        student = User.query.filter_by(
-                    email = email,
-                    course=get_course()
-                ).one_or_none()
+        student = offering_member(email=email)
         tutoring_present_days = []
         if student:
             attendances = (Attendance.query.join(Attendance.session).join(Session.section)
