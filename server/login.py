@@ -8,8 +8,8 @@ from flask_login import LoginManager, login_user, logout_user
 from markupsafe import escape
 
 import canvas_service
-from offering import current_offering, get_course, in_offering
-from models import Account, User, db
+from offering import current_offering, in_offering
+from models import User, db
 
 AFTER_LOGIN_KEY = "after_login"
 
@@ -22,8 +22,8 @@ def _safe_next(target):
 
 
 def complete_login(token: dict):
-    """Create or update the signed-in Account from a Canvas OAuth token response."""
-    canvas_user_id = token["user"]["id"]
+    """Create or update the signed-in User from a Canvas OAuth token response."""
+    canvas_user_id = str(token["user"]["id"])
     access_token = token["access_token"]
     profile = canvas_service.get_profile(canvas_user_id, access_token)
     email = profile.get("primary_email") or profile.get("login_id")
@@ -31,50 +31,50 @@ def complete_login(token: dict):
     courses = canvas_service.get_user_courses(canvas_user_id, access_token)
     override_id = current_app.config.get("ADMIN_OVERRIDE_CANVAS_COURSE_ID")
 
-    account = Account.query.filter_by(canvas_id=str(canvas_user_id)).one_or_none()
-    if account is None:
-        account = Account(canvas_id=str(canvas_user_id))
-        db.session.add(account)
-    account.email = email
-    account.name = name
-    account.canvas_courses = courses
-    account.is_global_admin = override_id is not None and str(override_id) in courses
+    # People added by staff or imported from a spreadsheet have a User (found
+    # by email) before they ever log in.
+    user = (
+        User.query.filter_by(canvas_id=canvas_user_id).one_or_none()
+        or User.query.filter_by(email=email).one_or_none()
+    )
+    if user is None:
+        user = User(email=email)
+        db.session.add(user)
+    user.canvas_id = canvas_user_id
+    user.email = email
+    user.name = name
+    user.canvas_courses = courses
+    user.is_global_admin = override_id is not None and str(override_id) in courses
     db.session.commit()
 
-    login_user(account, remember=True)
+    login_user(user, remember=True)
     session.permanent = True
     # Keep only a short-lived access token, and only for staff, who need it to
     # look up students; reauthorize when it expires.
     session.pop("canvas_access_token", None)
     session.pop("canvas_token_expires_at", None)
-    if account.is_global_admin or any(c["is_staff"] for c in courses.values()):
+    if user.is_global_admin or any(c["is_staff"] for c in courses.values()):
         session["canvas_access_token"] = access_token
         session["canvas_token_expires_at"] = time.time() + token.get("expires_in", 3600)
 
 
-def course_user(account: Account):
-    """The account's User row in the current course, created on first visit.
+def sync_offering_role(user: User) -> bool:
+    """Bring the user's role in the current offering in line with Canvas.
 
-    Staff and admin flags follow the account's Canvas roles from its last
-    sign-in. Returns None if the account isn't enrolled in the course.
+    Returns False if the user isn't enrolled in the offering's Canvas course.
     """
-    roles = account.roles_in(current_offering().canvas_id)
+    if user.is_global_admin:
+        return True
+    offering = current_offering()
+    roles = user.canvas_roles_in(offering.canvas_id)
     if roles is None:
-        return None
+        return False
     is_staff, is_admin = roles
-    course = get_course()
-    user = User.query.filter_by(email=account.email, course=course).one_or_none()
-    if user is None:
-        user = User(email=account.email, name=account.name, is_staff=is_staff,
-                    is_admin=is_admin, course=course)
-        db.session.add(user)
-    elif (user.name, user.is_staff, user.is_admin) == (account.name, is_staff, is_admin):
-        return user
-    user.name = account.name
-    user.is_staff = is_staff
-    user.is_admin = is_admin
-    db.session.commit()
-    return user
+    if (offering.key in user.staff_offerings, offering.key in user.admin_offerings,
+            user.is_member_of(offering.key)) != (is_staff, is_admin, True):
+        user.set_role(offering.key, is_staff=is_staff, is_admin=is_admin)
+        db.session.commit()
+    return True
 
 
 def create_login_client(app: flask.Flask):
@@ -98,12 +98,9 @@ def create_login_client(app: flask.Flask):
 
     @login_manager.user_loader
     def load_user(session_id):
-        account_id = Account.parse_session_id(session_id)
-        account = db.session.get(Account, account_id) if account_id else None
-        if account is None or not in_offering():
-            return account
-        user = course_user(account)
-        if user is None:
+        user_id = User.parse_session_id(session_id)
+        user = db.session.get(User, user_id) if user_id else None
+        if user is not None and in_offering() and not sync_offering_role(user):
             abort(403, "You aren't enrolled in this course on bCourses. If you just "
                        "enrolled, sign out and sign in again.")
         return user

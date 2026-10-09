@@ -13,8 +13,9 @@ Requires Python 3.14 and Node 24 (`mise install` picks both up from `mise.toml`)
    pip install -r server/requirements.txt
    ```
 3. Install the frontend dependencies with `yarn install`.
-4. Run both with `yarn dev`, or separately: the backend with `python3 main.py` from `server/` (port 8000) and the frontend with `yarn start` (the Vite dev server on port 3000, which forwards API calls, the login routes and `/offerings` to port 8000).
-5. Run the backend tests from the repository root with `python -m unittest discover -s server -p "test_*.py"`.
+4. Create or update the local database with `flask --app main db upgrade` from `server/`.
+5. Run both with `yarn dev`, or separately: the backend with `python3 main.py` from `server/` (port 8000) and the frontend with `yarn start` (the Vite dev server on port 3000, which forwards API calls, the login routes and `/offerings` to port 8000).
+6. Run the backend tests from the repository root with `python -m unittest discover -s server -p "test_*.py"`.
 
 ## Authentication
 
@@ -49,6 +50,17 @@ python3 import_locally.py --course 157 --type enrollment --file test_csvs/lab_en
 ```
 
 4. Open `localhost:3000/offerings/157/`; you should see the example sections.
+
+## Database Migrations
+
+The schema is managed with Flask-Migrate (Alembic); migrations live in `server/migrations/versions`. To change the schema, edit `server/models.py`, then from `server/`:
+
+```
+flask --app main db migrate -m "describe the change"   # generates a migration; review and edit it
+flask --app main db upgrade                             # applies it to your local database
+```
+
+Commit the migration with the model change. Deployments with `RUN_MIGRATIONS=true` (staging and production) run `flask db upgrade` when they start; PR previews never do, because they share the staging database.
 
 ## Import Sections from GCP
 1. Download the sections database to obtain a `.sql` file. Relevant Links [1](https://cloud.google.com/sql/docs/mysql/import-export/import-export-sql) and [2](https://cloud.google.com/storage/docs/downloading-objects).

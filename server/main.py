@@ -1,6 +1,7 @@
 import os
 
 from flask import Flask
+from flask_migrate import Migrate
 from jinja2 import ChoiceLoader, FileSystemLoader
 from werkzeug.middleware.proxy_fix import ProxyFix
 
@@ -24,6 +25,8 @@ app.wsgi_app = ProxyFix(app.wsgi_app, x_proto=1, x_host=1)
 
 load_config(app)
 db.init_app(app)
+# Schema changes are Alembic migrations in server/migrations; `flask db upgrade` applies them.
+Migrate(app, db, directory=os.path.join(os.path.dirname(os.path.abspath(__file__)), "migrations"))
 create_state_client(app)
 create_login_client(app)
 create_offering_pages(app)
@@ -32,10 +35,6 @@ create_offering_pages(app)
 @app.route("/health")
 def health():
     return "ok"
-
-
-with app.app_context():
-    db.create_all()
 
 
 if __name__ == "__main__":
