@@ -282,11 +282,6 @@ class User(db.Model, UserMixin):
         else:
             self.admin_offerings = self.admin_offerings - {key}
 
-    def remove_from_offering(self, key: str):
-        self.staff_offerings = self.staff_offerings - {key}
-        self.admin_offerings = self.admin_offerings - {key}
-        self.student_offerings = self.student_offerings - {key}
-
     def sections_in(self, key: str) -> List["Section"]:
         return [section for section in self.sections if section.course == key]
 
@@ -384,13 +379,6 @@ class User(db.Model, UserMixin):
                 )
             ],
         }
-
-
-def offering_members(key: str):
-    """Query for everyone (staff or student) in an offering."""
-    return User.query.filter(
-        db.or_(set_contains(User.staff_offerings, key), set_contains(User.student_offerings, key))
-    )
 
 
 def offering_member(**filters):

@@ -312,18 +312,28 @@ class CanvasLoginTests(unittest.TestCase):
             user = self.api("refresh_state", canvas_id).get_json()["data"]["currentUser"]
             self.assertEqual(len(user["attendanceHistory"]), expected)
 
-    def test_reset_removes_people_from_the_offering_but_keeps_them(self):
+    def test_reset_removes_sections_and_assignments_but_keeps_people(self):
         known = self.enroll_known_in_data8()
-        known.sections.append(db.session.get(Section, self.section_id))
+        section = db.session.get(Section, self.section_id)
+        known.sections.append(section)
+        section.staff = db.session.get(User, self.staff_id)
+        session = Session(course="cs61a", start_time=0, section=section)
+        db.session.add(Attendance(course="cs61a", status=AttendanceStatus.present,
+                                  session=session, student=known))
         staff = db.session.get(User, self.staff_id)
         staff.canvas_courses = {str(CS61A): canvas_course("CS 61A", staff=True, admin=True)}
         db.session.commit()
+
         self.assertTrue(self.api("reset_sections").get_json()["success"])
         db.session.remove()
-        known = db.session.get(User, self.known_id)
-        self.assertEqual(known.student_offerings, {str(DATA8)})
-        self.assertEqual([s.id for s in known.sections], [self.data8_section_id])
         self.assertIsNone(db.session.get(Section, self.section_id))
+        self.assertEqual(Session.query.filter_by(course="cs61a").count(), 0)
+        self.assertEqual(Attendance.query.filter_by(course="cs61a").count(), 0)
+        known = db.session.get(User, self.known_id)
+        # Still in the course, and untouched in DATA 8.
+        self.assertEqual(known.student_offerings, {"cs61a", str(DATA8)})
+        self.assertEqual([s.id for s in known.sections], [self.data8_section_id])
+        self.assertIn("cs61a", db.session.get(User, self.staff_id).staff_offerings)
 
     def test_course_that_is_not_set_up_is_not_found(self):
         self.assertEqual(self.api("refresh_state", UNSET_UP).status_code, 404)

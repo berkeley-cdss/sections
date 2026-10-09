@@ -33,7 +33,6 @@ from models import (
     db,
     find_or_add_person,
     offering_member,
-    offering_members,
     set_contains,
     user_section,
 )
@@ -797,12 +796,12 @@ def create_state_client(app: flask.Flask):
         Attendance.query.filter_by(course=course).delete()
         Session.query.filter_by(course=course).delete()
 
-        # People can be in other offerings, so take them out of this one rather
-        # than deleting them; staff get their role back from Canvas on their next visit.
-        for user in offering_members(course).all():
-            user.sections = [s for s in user.sections if s.course != course]
-            user.remove_from_offering(course)
-
+        # Remove the offering's sections and everyone's assignments to them, but
+        # keep the people and their roles in the offering.
+        course_section_ids = [s.id for s in Section.query.filter_by(course=course)]
+        db.session.execute(
+            user_section.delete().where(user_section.c.section_id.in_(course_section_ids))
+        )
         Section.query.filter_by(course=course).delete()
         db.session.commit()
         return refresh_state()
