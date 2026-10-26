@@ -17,9 +17,8 @@ export default function ResetSectionsModal({ show, onReset, onClose }: Props) {
         WARNING: This action will delete all of your course's sections, their
         sessions and attendance history, and every student and staff assignment
         to them. Students and staff stay in the course. This is
-        irreversible and should only be done in order to prepare the Sections
-        tool for a new semester. Be extremely cautious when using this button. You
-        have been warned.
+        irreversible and does not need to be done after a semester ends. Consider
+        carefully if you really need to press this button. You have been warned.
       </Modal.Body>
       <Modal.Footer>
         <Button variant="secondary" onClick={onClose}>
