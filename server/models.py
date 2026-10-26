@@ -44,7 +44,8 @@ def current_course_key():
 # Association Table for User - Section Pairs because each user can have multiple sections
 user_section = db.Table('user_section',
     db.Column('user_id', db.Integer, db.ForeignKey('users.id'), primary_key=True),
-    db.Column('section_id', db.Integer, db.ForeignKey('section.id'), primary_key=True)
+    # Indexed for looking up a section's students; the primary key covers user_id.
+    db.Column('section_id', db.Integer, db.ForeignKey('section.id'), primary_key=True, index=True)
 )
 
 
@@ -55,7 +56,7 @@ class Section(db.Model):
     capacity: int = db.Column(db.Integer)
     can_self_enroll: bool = db.Column(db.Boolean)
     enrollment_code: str = db.Column(db.String(255), nullable=True)
-    staff_id: int = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=True)
+    staff_id: int = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=True, index=True)
     staff: "User" = db.relationship(
         "User",
         backref=db.backref("sections_taught", lazy="joined"),
@@ -70,7 +71,8 @@ class Section(db.Model):
     name: str = db.Column(db.String(255)) # indicates section type e.g. lab or discussion
     start_time: int = db.Column(db.Integer)
     end_time: int = db.Column(db.Integer)
-    location: str = db.Column(db.String(255), nullable=False)
+    # Some sections moved from the monorepo have no location.
+    location: str = db.Column(db.String(255), nullable=True)
     call_link: str = db.Column(db.String(255), nullable=True)
     # sessions: List[Session] is a backref defined on Session
 

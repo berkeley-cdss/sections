@@ -4,6 +4,8 @@ import unittest
 
 import sqlalchemy as sa
 from flask import Flask
+from alembic.autogenerate import compare_metadata
+from alembic.migration import MigrationContext
 from flask_migrate import Migrate, upgrade
 
 from models import db
@@ -97,6 +99,14 @@ class SingleUserMigrationTests(unittest.TestCase):
     def test_fresh_database(self):
         upgrade()
         self.assertEqual(self.sql("SELECT count(*) FROM users"), [(0,)])
+
+    def test_migrations_match_the_models(self):
+        """A database built by the migrations is exactly what the models describe,
+        so new model changes need a migration."""
+        upgrade()
+        with db.engine.connect() as conn:
+            differences = compare_metadata(MigrationContext.configure(conn), db.metadata)
+        self.assertEqual(differences, [])
 
 
 if __name__ == "__main__":
