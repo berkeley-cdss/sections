@@ -7,6 +7,7 @@ import { Link } from "react-router-dom";
 import styled from "styled-components";
 import AddStudentModal from "./AddStudentModal";
 import AttendanceRow from "./AttendanceRow";
+import Pronouns from "./Pronouns";
 import { nextSessionStartTime } from "./models";
 import type { AttendanceStatusType, Person, SectionDetails, Session } from "./models";
 import useSectionAPI from "./useSectionAPI";
@@ -110,6 +111,7 @@ export default function SessionAttendance({ section, session }: Props) {
                 <tr key={student.email} className="text-center">
                   <td className="align-middle">
                     <Link to={`/user/${student.id}`}>{student.name}</Link>
+                    <Pronouns of={student} />
                   </td>
                   <td>
                     <AttendanceRow

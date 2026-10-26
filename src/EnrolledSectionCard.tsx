@@ -5,6 +5,7 @@ import * as React from "react";
 import { Link } from "react-router-dom";
 import type { Section } from "./models";
 import { configAllows, sectionTitle } from "./models";
+import Pronouns from "./Pronouns";
 import SectionJoinCallButtons from "./SectionJoinCallButtons";
 import SectionTextFieldRow from "./SectionTextFieldRow";
 import SectionCard from "./SectionCard";
@@ -112,7 +113,17 @@ export default function EnrolledSectionCard({ section }: Props) {
         )}
         {!isStaff && (
           <p>
-            You have enrolled in {section.staff == null ? "a" : `${section.staff.name}'s`} section!{" "}
+            You have enrolled in{" "}
+            {section.staff == null ? (
+              "a"
+            ) : (
+              <>
+                {section.staff.name}
+                <Pronouns of={section.staff} />
+                &apos;s
+              </>
+            )}{" "}
+            section!{" "}
           </p>
         )}
         <p>

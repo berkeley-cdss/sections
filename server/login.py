@@ -51,6 +51,7 @@ def complete_login(token: dict):
             email = user.email
     user.email = email
     user.name = name
+    user.pronouns = profile.get("pronouns") or None
     user.canvas_courses = courses
     user.is_global_admin = override_id is not None and str(override_id) in courses
     db.session.commit()

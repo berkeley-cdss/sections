@@ -192,12 +192,56 @@ class CanvasLoginTests(unittest.TestCase):
         self.assertEqual((tutor.canvas_id, tutor.name), ("77", "Canvas Name"))
         self.assertEqual(tutor.staff_offerings, {"cs61a"})
 
-    def log_in_as(self, canvas_id, email, courses=None):
+    def log_in_as(self, canvas_id, email, courses=None, **profile):
         with self.app.test_request_context(), \
              patch("login.canvas_service.get_profile",
-                   return_value={"primary_email": email, "short_name": "Name"}), \
+                   return_value={"primary_email": email, "short_name": "Name", **profile}), \
              patch("login.canvas_service.get_user_courses", return_value=courses or {}):
             complete_login({"user": {"id": canvas_id}, "access_token": "access"})
+
+    def test_login_records_pronouns_as_shared_in_canvas(self):
+        self.log_in_as(2, "known@test", pronouns="she/her")
+        self.assertEqual(db.session.get(User, self.known_id).pronouns, "she/her")
+        # Stopped sharing them: Canvas sends none, so they're cleared.
+        self.log_in_as(2, "known@test")
+        self.assertIsNone(db.session.get(User, self.known_id).pronouns)
+        self.log_in_as(2, "known@test", pronouns="")
+        self.assertIsNone(db.session.get(User, self.known_id).pronouns)
+
+    def test_pronouns_show_only_where_the_name_does(self):
+        known = db.session.get(User, self.known_id)
+        section = db.session.get(Section, self.section_id)
+        peer = User(email="peer@test", name="Peer", pronouns="they/them")
+        unrelated = User(email="unrelated@test", name="Unrelated", pronouns="he/him")
+        for person in (peer, unrelated):
+            person.set_role("cs61a", is_staff=False)
+        section.students.extend([known, peer])
+        db.session.add_all([peer, unrelated])
+        db.session.commit()
+        self.sign_in(known)
+        roster = self.api("refresh_state").get_json()["data"]["enrolledSections"][0]["students"]
+        self.assertIn({"name": "Peer", "pronouns": "they/them"},
+                      [{"name": p["name"], "pronouns": p["pronouns"]} for p in roster])
+        # A classmate outside your sections is anonymized, pronouns included.
+        with self.app.test_request_context():
+            g.offering = Offering.query.filter_by(canvas_id=CS61A).one()
+            g._login_user = db.session.get(User, self.known_id)
+            hidden = db.session.get(User, unrelated.id).json
+        self.assertEqual((hidden["name"], hidden["pronouns"]), ("Anon Student", None))
+
+    def test_canvas_lookup_uses_the_display_name(self):
+        import canvas_service
+
+        class Enrollment:
+            user = {"id": 555, "login_id": "new@test", "name": "Legal Name", "short_name": "Display Name"}
+
+        client = patch("canvas_service._client").start()
+        self.addCleanup(patch.stopall)
+        client.return_value.get_course.return_value.get_enrollments.return_value = [Enrollment()]
+        with self.app.test_request_context():
+            g.offering = Offering.query.filter_by(canvas_id=CS61A).one()
+            self.assertEqual(canvas_service.get_student_from_email("new@test", "token"), ("555", "Display Name"))
+            self.assertIsNone(canvas_service.get_student_from_email("other@test", "token"))
 
     def test_login_never_claims_someone_else_by_email(self):
         # Canvas user 99 has the email of "staff" (Canvas user 1).

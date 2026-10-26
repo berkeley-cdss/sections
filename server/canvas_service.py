@@ -22,7 +22,8 @@ def _client(access_token: str) -> Canvas:
 
 
 def get_profile(user_id, access_token: str) -> dict:
-    """Canvas profile with ``primary_email``, ``name`` and ``short_name``."""
+    """Canvas profile with ``primary_email``, ``name``, ``short_name`` (the display
+    name) and, if the person shares them, ``pronouns``."""
     return _client(access_token).get_user(user_id).get_profile()
 
 
@@ -60,9 +61,10 @@ def get_user_courses(user_id, access_token: str) -> dict:
 
 def get_student_from_email(email: str, access_token: str):
     """``(canvas user id, name)`` of the student in the current course with
-    login ``email``, or None."""
+    login ``email``, or None. The name is their display name, as at login."""
     course = _client(access_token).get_course(get_canvas_course_id())
     for enrollment in course.get_enrollments(type=["StudentEnrollment"]):
-        if enrollment.user["login_id"] == email:
-            return str(enrollment.user["id"]), enrollment.user["name"]
+        user = enrollment.user
+        if user["login_id"] == email:
+            return str(user["id"]), user.get("short_name") or user["name"]
     return None
