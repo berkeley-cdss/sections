@@ -33,7 +33,8 @@ class StringSet(types.TypeDecorator):
 
 def set_contains(column, item: str):
     """SQL condition: the StringSet ``column`` contains ``item``."""
-    return (literal(",") + db.func.coalesce(column, "") + literal(",")).like(f"%,{item},%")
+    # autoescape: keys like "cs61a_tutoring" contain "_", a LIKE wildcard.
+    return (literal(",") + db.func.coalesce(column, "") + literal(",")).contains(f",{item},", autoescape=True)
 
 
 def current_course_key():
@@ -267,7 +268,7 @@ class User(db.Model, UserMixin):
         return key is not None and (self.is_global_admin or key in self.admin_offerings)
 
     def is_member_of(self, key: str) -> bool:
-        return key in self.staff_offerings or key in self.student_offerings
+        return self.is_global_admin or key in self.staff_offerings or key in self.student_offerings
 
     def set_role(self, key: str, *, is_staff: bool, is_admin: bool = False):
         """Make this person staff (optionally admin) or a student in an offering."""
@@ -288,12 +289,18 @@ class User(db.Model, UserMixin):
         delete ``other``."""
         # Through the relationships rather than bulk UPDATEs: deleting `other`
         # would otherwise null out references SQLAlchemy still holds in memory.
+        # Keep this user's own section where both have one of the same type in
+        # an offering, and their own attendance where both have one for a session.
         for section in other.sections:
-            if section not in self.sections:
+            if not any(s.course == section.course and s.name == section.name for s in self.sections):
                 self.sections.append(section)
         other.sections = []
+        own_sessions = {a.session_id for a in self.attendances}
         for attendance in list(other.attendances):
-            attendance.student = self
+            if attendance.session_id in own_sessions:
+                db.session.delete(attendance)
+            else:
+                attendance.student = self
         for section in list(other.sections_taught):
             section.staff = self
         self.staff_offerings = self.staff_offerings | other.staff_offerings
@@ -401,10 +408,15 @@ class User(db.Model, UserMixin):
         }
 
 
-def offering_member(**filters):
-    """The person matching ``filters`` (e.g. email=...) if they're in the
-    current offering, otherwise None."""
-    user = User.query.filter_by(**filters).one_or_none()
+def with_email(email: str):
+    """The person with this email, ignoring case (as the migration merged them)."""
+    return User.query.filter(db.func.lower(User.email) == email.strip().lower()).one_or_none()
+
+
+def offering_member(*, email: str | None = None, id: int | None = None):
+    """The person with this email or id if they're in the current offering,
+    otherwise None."""
+    user = with_email(email) if email is not None else db.session.get(User, id)
     return user if user is not None and user.is_member_of(current_course_key()) else None
 
 
@@ -413,7 +425,7 @@ def find_or_add_person(email: str, name: str, canvas_id: str | None = None) -> U
     if new. Without a Canvas id (e.g. from a spreadsheet), email is all there is."""
     user = User.query.filter_by(canvas_id=canvas_id).one_or_none() if canvas_id else None
     if user is None:
-        user = User.query.filter_by(email=email).one_or_none()
+        user = with_email(email)
         if user is not None and canvas_id and user.canvas_id not in (None, canvas_id):
             raise Failure(f"{email} belongs to a different bCourses account.")
     if user is None:

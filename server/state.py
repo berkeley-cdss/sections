@@ -507,6 +507,7 @@ def create_state_client(app: flask.Flask):
     @staff_required
     def start_session(section_id: str, start_time: int):
         section_id = int(section_id)
+        Section.query.filter_by(id=section_id, course=get_course()).one()
         existing_session = Session.query.filter_by(
             start_time=start_time, section_id=section_id
         ).first()

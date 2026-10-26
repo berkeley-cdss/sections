@@ -36,7 +36,10 @@ def _people(bind):
     meta = sa.MetaData()
     old_user = sa.Table("user", meta, autoload_with=bind)
     people = {}
-    for row in bind.execute(sa.select(old_user).order_by(old_user.c.id)):
+    rows = bind.execute(sa.select(old_user).order_by(old_user.c.id)).all()
+    if any(not row.email for row in rows):
+        raise RuntimeError("Some user rows have no email, so they can't be merged; fix them first.")
+    for row in rows:
         person = people.setdefault(row.email.lower(), {
             "email": row.email, "name": row.name or row.email, "canvas_id": None,
             "is_global_admin": False, "canvas_courses": {},
@@ -45,6 +48,8 @@ def _people(bind):
         person["old_ids"].append(row.id)
         if row.name:
             person["name"] = row.name  # rows are in id order, so the newest name wins
+        if row.course is None:
+            continue  # no offering to give them a role in
         if row.is_staff:
             person["staff"].add(row.course)
         else:
@@ -124,6 +129,14 @@ def upgrade():
 
     if sa.inspect(bind).has_table("user_section_junction"):
         op.drop_table("user_section_junction")
+    inspector = sa.inspect(bind)
+    unexpected = [
+        table for table in inspector.get_table_names()
+        if table not in {t for t, _ in USER_REFERENCES} | {"user"} | set(LEFTOVER_TABLES)
+        and any(fk["referred_table"] == "user" for fk in inspector.get_foreign_keys(table))
+    ]
+    if unexpected:
+        raise RuntimeError(f"Tables {unexpected} reference user; extend this migration to re-point them.")
     for table, column in USER_REFERENCES:
         _drop_foreign_keys_to(table, "user")
         # Two steps, through negative ids: new ids overlap old ones, and
@@ -149,7 +162,7 @@ def upgrade():
             batch.drop_column("slot_id")
 
     inspector = sa.inspect(bind)
-    for table in ("account", "user") + LEFTOVER_TABLES:
+    for table in LEFTOVER_TABLES + ("account", "user"):
         if inspector.has_table(table):
             op.drop_table(table)
 

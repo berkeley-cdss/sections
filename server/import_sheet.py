@@ -172,7 +172,7 @@ def import_enrollment(data: Iterator):
             raise Failure(f"Unable to import enrollment data for {student_email}! Trying to enroll in {staff_email} | {location} | {start_time} | {section_type}")
 
         # If user is already in a section of the same type, remove it and add target section
-        for s in student.sections:
+        for s in student.sections_in(get_course()):
             if s.name == section.name:
                 student.sections.remove(s)
                 break

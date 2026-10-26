@@ -8,7 +8,8 @@ from sqlalchemy.exc import NoResultFound
 
 from offerings import create_offering_pages
 from login import complete_login, create_login_client
-from models import Attendance, AttendanceStatus, Offering, Section, Session, User, db
+from import_sheet import import_enrollment, parse_time_string
+from models import Attendance, AttendanceStatus, Offering, Section, Session, User, db, set_contains
 from state import create_state_client
 
 # Offering 101 was moved from the monorepo, so its rows use the old key "cs61a".
@@ -386,6 +387,62 @@ class CanvasLoginTests(unittest.TestCase):
         self.assertEqual(known.student_offerings, {"cs61a", str(DATA8)})
         self.assertEqual([s.id for s in known.sections], [self.data8_section_id])
         self.assertIn("cs61a", db.session.get(User, self.staff_id).staff_offerings)
+
+    def test_enrollment_import_keeps_same_type_sections_in_other_offerings(self):
+        self.enroll_known_in_data8()  # in DATA 8's Lab
+        cs61a_lab = db.session.get(Section, self.section_id)
+        cs61a_lab.staff = db.session.get(User, self.staff_id)
+        cs61a_lab.start_time = parse_time_string("M", "10:00a")
+        db.session.commit()
+        with self.app.test_request_context():
+            g.offering = Offering.query.filter_by(canvas_id=CS61A).one()
+            import_enrollment(iter([
+                ["Student Email", "Student Name", "Staff Email", "Location", "Day", "Start", "Type"],
+                ["known@test", "Known", "staff@test", "Room", "M", "10:00a", "Lab"],
+            ]))
+        db.session.remove()
+        sections = {s.id for s in db.session.get(User, self.known_id).sections}
+        self.assertEqual(sections, {self.section_id, self.data8_section_id})
+
+    def test_email_lookups_ignore_case(self):
+        with patch("state.canvas_service.get_student_from_email") as lookup:
+            self.assertTrue(self.add_students("KNOWN@Test")["success"])
+        lookup.assert_not_called()  # found the existing person, no Canvas lookup
+        self.assertEqual(User.query.count(), 2)
+
+    def test_merging_keeps_one_section_per_type_in_an_offering(self):
+        known = db.session.get(User, self.known_id)
+        known.sections.append(db.session.get(Section, self.section_id))
+        other_lab = lab("cs61a", location="Other Room")
+        imported = User(email="known.new@test", name="Imported")
+        imported.set_role("cs61a", is_staff=False)
+        imported.sections.append(other_lab)
+        db.session.add_all([other_lab, imported])
+        db.session.commit()
+        self.log_in_as(2, "known.new@test")
+        db.session.remove()
+        self.assertEqual([s.id for s in db.session.get(User, self.known_id).sections], [self.section_id])
+
+    def test_global_admins_count_as_members_everywhere(self):
+        boss = User(email="boss@test", name="Boss", canvas_id="9", is_global_admin=True)
+        db.session.add(boss)
+        db.session.commit()
+        result = self.api("get_userid", email="boss@test").get_json()
+        self.assertEqual(result["data"], boss.id)
+
+    def test_offering_keys_match_exactly(self):
+        dash = User(email="dash@test", name="Dash")
+        dash.set_role("cs61a-tutoring", is_staff=False)
+        db.session.add(dash)
+        db.session.commit()
+        # "_" is a LIKE wildcard; it must not match "-".
+        self.assertEqual(User.query.filter(set_contains(User.student_offerings, "cs61a_tutoring")).count(), 0)
+        self.assertEqual(User.query.filter(set_contains(User.student_offerings, "cs61a-tutoring")).count(), 1)
+
+    def test_sessions_can_only_start_for_this_offerings_sections(self):
+        with self.assertRaises(NoResultFound):  # a 500 outside tests
+            self.api("start_session", section_id=str(self.data8_section_id), start_time=0)
+        self.assertEqual(Session.query.count(), 0)
 
     def test_course_that_is_not_set_up_is_not_found(self):
         self.assertEqual(self.api("refresh_state", UNSET_UP).status_code, 404)

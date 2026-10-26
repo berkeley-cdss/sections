@@ -9,7 +9,7 @@ from markupsafe import escape
 
 import canvas_service
 from offering import current_offering, in_offering
-from models import User, db
+from models import User, db, with_email
 
 AFTER_LOGIN_KEY = "after_login"
 
@@ -34,18 +34,18 @@ def complete_login(token: dict):
     # Canvas ids are stable; emails can change, so they're only used to claim
     # someone added by staff or imported from a spreadsheet who hasn't logged in.
     user = User.query.filter_by(canvas_id=canvas_user_id).one_or_none()
-    with_email = User.query.filter_by(email=email).one_or_none()
+    email_owner = with_email(email)
     if user is None:
-        if with_email is not None and with_email.canvas_id is not None:
+        if email_owner is not None and email_owner.canvas_id is not None:
             abort(403, f"{email} already belongs to a different bCourses account. "
                        "Contact the course staff.")
-        user = with_email or User(email=email)
+        user = email_owner or User(email=email)
         db.session.add(user)
         user.canvas_id = canvas_user_id
-    elif with_email is not None and with_email is not user:
-        if with_email.canvas_id is None:
+    elif email_owner is not None and email_owner is not user:
+        if email_owner.canvas_id is None:
             # The same person, imported under their new email: merge them.
-            user.absorb(with_email)
+            user.absorb(email_owner)
         else:
             # Another bCourses account has this email; keep the one we have.
             email = user.email
