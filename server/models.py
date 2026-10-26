@@ -282,6 +282,26 @@ class User(db.Model, UserMixin):
         else:
             self.admin_offerings = self.admin_offerings - {key}
 
+    def absorb(self, other: "User"):
+        """Merge ``other`` (the same person under another email) into this user,
+        moving their sections, attendance, taught sections and roles, then
+        delete ``other``."""
+        # Through the relationships rather than bulk UPDATEs: deleting `other`
+        # would otherwise null out references SQLAlchemy still holds in memory.
+        for section in other.sections:
+            if section not in self.sections:
+                self.sections.append(section)
+        other.sections = []
+        for attendance in list(other.attendances):
+            attendance.student = self
+        for section in list(other.sections_taught):
+            section.staff = self
+        self.staff_offerings = self.staff_offerings | other.staff_offerings
+        self.admin_offerings = self.admin_offerings | other.admin_offerings
+        self.student_offerings = (self.student_offerings | other.student_offerings) - self.staff_offerings
+        db.session.delete(other)
+        db.session.flush()
+
     def sections_in(self, key: str) -> List["Section"]:
         return [section for section in self.sections if section.course == key]
 
@@ -388,12 +408,19 @@ def offering_member(**filters):
     return user if user is not None and user.is_member_of(current_course_key()) else None
 
 
-def find_or_add_person(email: str, name: str) -> User:
-    """The person with this email, created (not yet in any offering) if new."""
-    user = User.query.filter_by(email=email).one_or_none()
+def find_or_add_person(email: str, name: str, canvas_id: str | None = None) -> User:
+    """The person with this Canvas id or email, created (not yet in any offering)
+    if new. Without a Canvas id (e.g. from a spreadsheet), email is all there is."""
+    user = User.query.filter_by(canvas_id=canvas_id).one_or_none() if canvas_id else None
+    if user is None:
+        user = User.query.filter_by(email=email).one_or_none()
+        if user is not None and canvas_id and user.canvas_id not in (None, canvas_id):
+            raise Failure(f"{email} belongs to a different bCourses account.")
     if user is None:
         user = User(email=email, name=name)
         db.session.add(user)
+    if canvas_id:
+        user.canvas_id = canvas_id
     return user
 
 

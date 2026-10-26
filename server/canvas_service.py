@@ -59,9 +59,10 @@ def get_user_courses(user_id, access_token: str) -> dict:
 
 
 def get_student_from_email(email: str, access_token: str):
-    """Name of the student in the current course with login ``email``, or None."""
+    """``(canvas user id, name)`` of the student in the current course with
+    login ``email``, or None."""
     course = _client(access_token).get_course(get_canvas_course_id())
     for enrollment in course.get_enrollments(type=["StudentEnrollment"]):
         if enrollment.user["login_id"] == email:
-            return enrollment.user["name"]
+            return str(enrollment.user["id"]), enrollment.user["name"]
     return None

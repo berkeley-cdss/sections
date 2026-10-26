@@ -624,9 +624,7 @@ def create_state_client(app: flask.Flask):
                         "with Canvas again, then retry adding students."
                     )
                 try:
-                    canvasname = canvas_service.get_student_from_email(
-                        email, access_token
-                    )
+                    found = canvas_service.get_student_from_email(email, access_token)
                 except (InvalidAccessToken, Unauthorized):
                     raise Failure(
                         "Canvas authorization is no longer valid. Please log out and sign in "
@@ -638,9 +636,10 @@ def create_state_client(app: flask.Flask):
                         "and belongs to this class."
                     )
 
-                if (not canvasname):
+                if not found:
                     raise Failure("Could not find email that belongs to this class")
-                student = find_or_add_person(email, canvasname)
+                canvas_id, canvasname = found
+                student = find_or_add_person(email, canvasname, canvas_id=canvas_id)
                 student.set_role(get_course(), is_staff=False)
             add_student_helper(student, section)
         db.session.commit()

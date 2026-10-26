@@ -135,12 +135,13 @@ class CanvasLoginTests(unittest.TestCase):
 
     def test_fresh_token_is_passed_to_canvas(self):
         self.authorize()
-        with patch("state.canvas_service.get_student_from_email", return_value="New") as lookup:
+        with patch("state.canvas_service.get_student_from_email", return_value=("555", "New")) as lookup:
             self.assertTrue(self.add_students("new@test")["success"])
         lookup.assert_called_once_with("new@test", "access")
         db.session.remove()
         new = User.query.filter_by(email="new@test").one()
-        self.assertEqual(new.student_offerings, {"cs61a"})
+        # Recorded by Canvas id, so a later email change still finds them.
+        self.assertEqual((new.canvas_id, new.student_offerings), ("555", {"cs61a"}))
         self.assertEqual([s.id for s in new.sections], [self.section_id])
 
     def test_revoked_token_requests_reauthentication(self):
@@ -189,6 +190,57 @@ class CanvasLoginTests(unittest.TestCase):
         tutor = db.session.get(User, imported.id)
         self.assertEqual((tutor.canvas_id, tutor.name), ("77", "Canvas Name"))
         self.assertEqual(tutor.staff_offerings, {"cs61a"})
+
+    def log_in_as(self, canvas_id, email, courses=None):
+        with self.app.test_request_context(), \
+             patch("login.canvas_service.get_profile",
+                   return_value={"primary_email": email, "short_name": "Name"}), \
+             patch("login.canvas_service.get_user_courses", return_value=courses or {}):
+            complete_login({"user": {"id": canvas_id}, "access_token": "access"})
+
+    def test_login_never_claims_someone_else_by_email(self):
+        # Canvas user 99 has the email of "staff" (Canvas user 1).
+        with self.assertRaises(Exception) as raised:
+            self.log_in_as(99, "staff@test")
+        self.assertEqual(getattr(raised.exception, "code", None), 403)
+        db.session.rollback()
+        staff = db.session.get(User, self.staff_id)
+        self.assertEqual((staff.canvas_id, staff.email), ("1", "staff@test"))
+
+    def test_changed_email_follows_the_canvas_id(self):
+        self.log_in_as(2, "known.new@test")
+        known = db.session.get(User, self.known_id)
+        self.assertEqual(known.email, "known.new@test")
+        self.assertEqual(User.query.count(), 2)
+
+    def test_changed_email_merges_the_imported_record_with_that_email(self):
+        imported = User(email="known.new@test", name="Imported")
+        imported.set_role(str(DATA8), is_staff=True)
+        imported.sections.append(db.session.get(Section, self.data8_section_id))
+        db.session.add(imported)
+        db.session.commit()
+        imported_id = imported.id
+        db.session.get(Section, self.data8_section_id).staff_id = imported_id
+        data8_session = Session(course=str(DATA8), start_time=0, section_id=self.data8_section_id)
+        db.session.add(Attendance(course=str(DATA8), status=AttendanceStatus.present,
+                                  session=data8_session, student=imported))
+        db.session.commit()
+
+        self.log_in_as(2, "known.new@test")
+        db.session.remove()
+        self.assertIsNone(db.session.get(User, imported_id))
+        known = db.session.get(User, self.known_id)
+        self.assertEqual(known.email, "known.new@test")
+        self.assertEqual(known.staff_offerings, {str(DATA8)})
+        self.assertEqual(known.student_offerings, {"cs61a"})
+        self.assertEqual([s.id for s in known.sections], [self.data8_section_id])
+        self.assertEqual(db.session.get(Section, self.data8_section_id).staff_id, self.known_id)
+        self.assertEqual([a.student_id for a in Attendance.query.all()], [self.known_id])
+
+    def test_changed_email_owned_by_another_account_keeps_the_old_one(self):
+        self.log_in_as(2, "staff@test")
+        self.assertEqual(db.session.get(User, self.known_id).email, "known@test")
+        self.assertEqual(db.session.get(User, self.staff_id).email, "staff@test")
 
     def test_admin_override_course_makes_global_admin(self):
         self.app.config["ADMIN_OVERRIDE_CANVAS_COURSE_ID"] = 999
