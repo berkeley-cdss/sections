@@ -20,9 +20,10 @@ code {
 
 /* Keep Bootstrap 4's look after the Bootstrap 5 upgrade. */
 
-/* Bootstrap 5's "info" is a much brighter cyan; this is Bootstrap 4's. */
+/* Same as the header of the server-rendered pages (/ and /offerings), which use
+   Material Design Lite's indigo theme. */
 .navbar-sections {
-  background-color: #17a2b8;
+  background-color: #3f51b5;
 }
 
 /* Bootstrap 5 underlines links by default; Bootstrap 4 only did on hover. */
