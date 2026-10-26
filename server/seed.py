@@ -4,8 +4,10 @@ from random import choice
 
 from zoneinfo import ZoneInfo
 
+from flask_migrate import upgrade
+
 from main import app
-from models import Offering, Section, User, db, user_section
+from models import Offering, Section, db, find_or_add_person
 
 
 def seed(canvas_course_id: int):
@@ -13,7 +15,7 @@ def seed(canvas_course_id: int):
     if app.config["APP_ENV"] != "development":
         return
     with app.app_context():
-        db.create_all()
+        upgrade()
         if Offering.query.filter_by(canvas_id=canvas_course_id).one_or_none() is None:
             db.session.add(Offering(canvas_id=canvas_course_id, key=str(canvas_course_id), name="Demo 101"))
         course = str(canvas_course_id)
@@ -57,13 +59,8 @@ def seed(canvas_course_id: int):
         for i in range(section_count * 2):
             discussion = choice(discussions)
             lab = choice(labs)
-            user = User(
-                course=course,
-                email=f"gobears{i}@berkeley.edu",
-                name=f"Oski {i}th of his name",
-                is_staff=False,
-                is_admin=False,
-            )
+            user = find_or_add_person(f"gobears{i}@berkeley.edu", f"Oski {i}th of his name")
+            user.set_role(course, is_staff=False)
             user.sections = [discussion, lab]
             db.session.add(user)
             users.append(user)

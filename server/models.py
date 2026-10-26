@@ -3,8 +3,10 @@ from random import randrange
 from typing import List
 from urllib.parse import quote
 
+from flask import g
 from flask_login import UserMixin, current_user
 from flask_sqlalchemy import SQLAlchemy
+from sqlalchemy import literal, types
 from sqlalchemy.orm import DeclarativeBase, joinedload
 
 
@@ -15,9 +17,33 @@ class Base(DeclarativeBase):
 
 db = SQLAlchemy(model_class=Base)
 
+
+class StringSet(types.TypeDecorator):
+    """A set of strings stored as comma-separated text, as in seating."""
+
+    impl = types.Text
+    cache_ok = True
+
+    def process_bind_param(self, value, dialect):
+        return ",".join(sorted(set(value or ())))
+
+    def process_result_value(self, value, dialect):
+        return set(value.split(",")) if value else set()
+
+
+def set_contains(column, item: str):
+    """SQL condition: the StringSet ``column`` contains ``item``."""
+    # autoescape: keys like "cs61a_tutoring" contain "_", a LIKE wildcard.
+    return (literal(",") + db.func.coalesce(column, "") + literal(",")).contains(f",{item},", autoescape=True)
+
+
+def current_course_key():
+    """The current offering's key, or None outside an offering's pages."""
+    return g.offering.key if "offering" in g else None
+
 # Association Table for User - Section Pairs because each user can have multiple sections
 user_section = db.Table('user_section',
-    db.Column('user_id', db.Integer, db.ForeignKey('user.id'), primary_key=True),
+    db.Column('user_id', db.Integer, db.ForeignKey('users.id'), primary_key=True),
     db.Column('section_id', db.Integer, db.ForeignKey('section.id'), primary_key=True)
 )
 
@@ -29,7 +55,7 @@ class Section(db.Model):
     capacity: int = db.Column(db.Integer)
     can_self_enroll: bool = db.Column(db.Boolean)
     enrollment_code: str = db.Column(db.String(255), nullable=True)
-    staff_id: int = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=True)
+    staff_id: int = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=True)
     staff: "User" = db.relationship(
         "User",
         backref=db.backref("sections_taught", lazy="joined"),
@@ -161,7 +187,7 @@ class Attendance(db.Model):
         lazy="joined",
         innerjoin=True,
     )
-    student_id: int = db.Column(db.Integer, db.ForeignKey("user.id"), index=True)
+    student_id: int = db.Column(db.Integer, db.ForeignKey("users.id"), index=True)
     student: "User" = db.relationship(
        lambda: User, backref=db.backref("attendances"), lazy="joined", innerjoin=True
     )
@@ -182,21 +208,117 @@ class Attendance(db.Model):
 
 
 class User(db.Model, UserMixin):
-    # just here to make PyCharm stop complaining
-    def __init__(self, email: str, name: str, is_staff: bool, course: str, is_admin: bool):
-        # noinspection PyArgumentList
-        super().__init__(email=email, name=name, is_staff=is_staff, course=course, is_admin=is_admin)
+    """One person, across all offerings, like seating's User.
+
+    Roles are per offering, in sets of offering keys (the value of each row's
+    `course` column) rather than seating's Canvas IDs, because offerings moved
+    from the monorepo aren't all linked to Canvas. Inside an offering's pages,
+    `is_staff` and `is_admin` answer for that offering.
+    """
+
+    __tablename__ = "users"
     id: int = db.Column(db.Integer, primary_key=True)
-    course: str = db.Column(db.String(255), index=True)
-    email: str = db.Column(db.String(255), index=True)
-    name: str = db.Column(db.String(255))
-    is_staff: bool = db.Column(db.Boolean)
-    is_admin: bool = db.Column(db.Boolean)
+    email: str = db.Column(db.String(255), unique=True, index=True, nullable=False)
+    name: str = db.Column(db.String(255), nullable=False)
+    # Set when the person first logs in; people added by staff or imported from
+    # a spreadsheet may not have one.
+    canvas_id: str = db.Column(db.String(255), unique=True, index=True, nullable=True)
+    # Staff and admin in every offering (member of ADMIN_OVERRIDE_CANVAS_COURSE_ID).
+    is_global_admin: bool = db.Column(db.Boolean, nullable=False, default=False)
+    # Active Canvas courses at last login, keyed by str(canvas course id):
+    # {"name", "code", "start_at", "is_staff", "is_admin", "is_student"}.
+    canvas_courses: dict = db.Column(db.JSON, nullable=False, default=dict)
+    staff_offerings: set = db.Column(StringSet, nullable=False, default=set)
+    admin_offerings: set = db.Column(StringSet, nullable=False, default=set)
+    student_offerings: set = db.Column(StringSet, nullable=False, default=set)
 
     sections: List["Section"] = db.relationship(
         'Section', secondary=user_section, back_populates='students', lazy='joined'
     )
     # attendances: List[Attendance] is a backref defined on Attendance
+
+    def __init__(self, **kwargs):
+        # Column defaults only apply on insert; set_role needs real sets before then.
+        for field in ("staff_offerings", "admin_offerings", "student_offerings"):
+            kwargs.setdefault(field, set())
+        kwargs.setdefault("canvas_courses", {})
+        kwargs.setdefault("is_global_admin", False)
+        super().__init__(**kwargs)
+
+    # Session ids are prefixed so cookies from before this table existed, which
+    # hold the id of a different table's row, can't be mistaken for a user id.
+    SESSION_ID_PREFIX = "user-"
+
+    def get_id(self):
+        return f"{self.SESSION_ID_PREFIX}{self.id}"
+
+    @classmethod
+    def parse_session_id(cls, session_id: str):
+        prefix, _, user_id = session_id.partition(cls.SESSION_ID_PREFIX)
+        return int(user_id) if not prefix and user_id.isdigit() else None
+
+    @property
+    def is_staff(self) -> bool:
+        key = current_course_key()
+        return key is not None and (self.is_global_admin or key in self.staff_offerings)
+
+    @property
+    def is_admin(self) -> bool:
+        key = current_course_key()
+        return key is not None and (self.is_global_admin or key in self.admin_offerings)
+
+    def is_member_of(self, key: str) -> bool:
+        return self.is_global_admin or key in self.staff_offerings or key in self.student_offerings
+
+    def set_role(self, key: str, *, is_staff: bool, is_admin: bool = False):
+        """Make this person staff (optionally admin) or a student in an offering."""
+        if is_staff:
+            self.staff_offerings = self.staff_offerings | {key}
+            self.student_offerings = self.student_offerings - {key}
+        else:
+            self.student_offerings = self.student_offerings | {key}
+            self.staff_offerings = self.staff_offerings - {key}
+        if is_admin:
+            self.admin_offerings = self.admin_offerings | {key}
+        else:
+            self.admin_offerings = self.admin_offerings - {key}
+
+    def absorb(self, other: "User"):
+        """Merge ``other`` (the same person under another email) into this user,
+        moving their sections, attendance, taught sections and roles, then
+        delete ``other``."""
+        # Through the relationships rather than bulk UPDATEs: deleting `other`
+        # would otherwise null out references SQLAlchemy still holds in memory.
+        # Keep this user's own section where both have one of the same type in
+        # an offering, and their own attendance where both have one for a session.
+        for section in other.sections:
+            if not any(s.course == section.course and s.name == section.name for s in self.sections):
+                self.sections.append(section)
+        other.sections = []
+        own_sessions = {a.session_id for a in self.attendances}
+        for attendance in list(other.attendances):
+            if attendance.session_id in own_sessions:
+                db.session.delete(attendance)
+            else:
+                attendance.student = self
+        for section in list(other.sections_taught):
+            section.staff = self
+        self.staff_offerings = self.staff_offerings | other.staff_offerings
+        self.admin_offerings = self.admin_offerings | other.admin_offerings
+        self.student_offerings = (self.student_offerings | other.student_offerings) - self.staff_offerings
+        db.session.delete(other)
+        db.session.flush()
+
+    def sections_in(self, key: str) -> List["Section"]:
+        return [section for section in self.sections if section.course == key]
+
+    def canvas_roles_in(self, canvas_course_id: int):
+        """``(is_staff, is_admin)`` in a Canvas course from the last login, or
+        None if not enrolled there."""
+        info = (self.canvas_courses or {}).get(str(canvas_course_id))
+        if info is None or not (info["is_staff"] or info["is_student"]):
+            return None
+        return info["is_staff"], info["is_admin"]
 
     @property
     def identity_json(self):
@@ -230,7 +352,7 @@ class User(db.Model, UserMixin):
     @property
     def full_json(self):
         attendances = (
-            Attendance.query.filter_by(student_id=self.id)
+            Attendance.query.filter_by(student_id=self.id, course=current_course_key())
             .options(
                 joinedload(Attendance.session, innerjoin=True)
                 .joinedload(Session.section)
@@ -252,7 +374,7 @@ class User(db.Model, UserMixin):
     @property
     def simple_json(self):
         attendances = (
-            Attendance.query.filter_by(student_id=self.id)
+            Attendance.query.filter_by(student_id=self.id, course=current_course_key())
             .options(
                 joinedload(Attendance.session, innerjoin=True)
                 .joinedload(Session.section)
@@ -284,6 +406,34 @@ class User(db.Model, UserMixin):
                 )
             ],
         }
+
+
+def with_email(email: str):
+    """The person with this email, ignoring case (as the migration merged them)."""
+    return User.query.filter(db.func.lower(User.email) == email.strip().lower()).one_or_none()
+
+
+def offering_member(*, email: str | None = None, id: int | None = None):
+    """The person with this email or id if they're in the current offering,
+    otherwise None."""
+    user = with_email(email) if email is not None else db.session.get(User, id)
+    return user if user is not None and user.is_member_of(current_course_key()) else None
+
+
+def find_or_add_person(email: str, name: str, canvas_id: str | None = None) -> User:
+    """The person with this Canvas id or email, created (not yet in any offering)
+    if new. Without a Canvas id (e.g. from a spreadsheet), email is all there is."""
+    user = User.query.filter_by(canvas_id=canvas_id).one_or_none() if canvas_id else None
+    if user is None:
+        user = with_email(email)
+        if user is not None and canvas_id and user.canvas_id not in (None, canvas_id):
+            raise Failure(f"{email} belongs to a different bCourses account.")
+    if user is None:
+        user = User(email=email, name=name)
+        db.session.add(user)
+    if canvas_id:
+        user.canvas_id = canvas_id
+    return user
 
 
 class CourseConfig(db.Model):
@@ -354,45 +504,6 @@ class Offering(db.Model):
 
     def __repr__(self):
         return f"<Offering {self.name}>"
-
-
-class Account(db.Model, UserMixin):
-    """Someone signed in with Canvas, across all of their courses.
-
-    Flask-Login keeps the account's id in the session. Inside a course, the
-    login manager resolves it to that course's User row (see login.py).
-    """
-
-    id: int = db.Column(db.Integer, primary_key=True)
-    canvas_id: str = db.Column(db.String(255), unique=True, index=True, nullable=False)
-    email: str = db.Column(db.String(255), index=True, nullable=False)
-    name: str = db.Column(db.String(255), nullable=False)
-    # Staff and admin in every course (member of ADMIN_OVERRIDE_CANVAS_COURSE_ID).
-    is_global_admin: bool = db.Column(db.Boolean, nullable=False, default=False)
-    # Active Canvas courses at last sign-in, keyed by str(canvas course id):
-    # {"name", "code", "start_at", "is_staff", "is_admin", "is_student"}.
-    canvas_courses: dict = db.Column(db.JSON, nullable=False, default=dict)
-
-    # Session ids are prefixed so cookies from before accounts existed, which
-    # hold a per-course User id, can't be mistaken for an account id.
-    SESSION_ID_PREFIX = "account-"
-
-    def get_id(self):
-        return f"{self.SESSION_ID_PREFIX}{self.id}"
-
-    @classmethod
-    def parse_session_id(cls, session_id: str):
-        prefix, _, account_id = session_id.partition(cls.SESSION_ID_PREFIX)
-        return int(account_id) if not prefix and account_id.isdigit() else None
-
-    def roles_in(self, canvas_course_id: int):
-        """``(is_staff, is_admin)`` in the course, or None if not enrolled."""
-        if self.is_global_admin:
-            return True, True
-        info = self.canvas_courses.get(str(canvas_course_id))
-        if info is None or not (info["is_staff"] or info["is_student"]):
-            return None
-        return info["is_staff"], info["is_admin"]
 
 
 class Failure(Exception):

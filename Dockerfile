@@ -62,7 +62,8 @@ EXPOSE 8080
 HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
     CMD python -c 'import os, urllib.request; urllib.request.urlopen("http://127.0.0.1:" + os.environ.get("PORT", "8080") + "/health")'
 
+# With RUN_MIGRATIONS=true (set on staging and production, never on PR previews,
+# which share the staging database), apply database migrations before starting.
 # `exec` keeps gunicorn as PID 1 so it gets SIGTERM directly on redeploy.
-# One worker process with threads, as in seating: Cloud Run's default instance
-# is 1 vCPU, and a single worker also keeps db.create_all() at startup from racing.
-CMD ["sh", "-c", "exec gunicorn -b 0.0.0.0:${PORT:-8080} main:app --workers ${WEB_CONCURRENCY:-1} --threads ${GUNICORN_THREADS:-8} --timeout ${GUNICORN_TIMEOUT:-120} --access-logfile -"]
+# One worker process with threads, as in seating: Cloud Run's default instance is 1 vCPU.
+CMD ["sh", "-c", "if [ \"$RUN_MIGRATIONS\" = true ]; then flask --app main db upgrade || exit 1; fi; exec gunicorn -b 0.0.0.0:${PORT:-8080} main:app --workers ${WEB_CONCURRENCY:-1} --threads ${GUNICORN_THREADS:-8} --timeout ${GUNICORN_TIMEOUT:-120} --access-logfile -"]

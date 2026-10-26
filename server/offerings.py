@@ -8,24 +8,24 @@ from flask_login import current_user, login_required
 from models import Offering, db
 
 
-def _categorized_offerings(account):
-    """Set-up offerings the account is staff in, a student in, or otherwise
+def _categorized_offerings(user):
+    """Set-up offerings the user is staff in, a student in, or otherwise
     enrolled in, like seating's offerings page."""
-    canvas_ids = [int(i) for i in account.canvas_courses]
+    canvas_ids = [int(i) for i in user.canvas_courses]
     existing = Offering.query.filter(Offering.canvas_id.in_(canvas_ids)).all()
     staff, students, other = [], [], []
     for offering in existing:
-        info = account.canvas_courses[str(offering.canvas_id)]
+        info = user.canvas_courses[str(offering.canvas_id)]
         # Offerings linked from the monorepo start without Canvas details.
         if offering.code is None:
             offering.name, offering.code, offering.start_at = info["name"], info["code"], info["start_at"]
-        if info["is_staff"] or account.is_global_admin:
+        if info["is_staff"] or user.is_global_admin:
             staff.append(offering)
         elif info["is_student"]:
             students.append(offering)
         else:
             other.append(offering)
-    if account.is_global_admin:
+    if user.is_global_admin:
         staff += Offering.query.filter(Offering.canvas_id.notin_(canvas_ids)).all()
     db.session.commit()
 
