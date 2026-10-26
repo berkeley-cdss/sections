@@ -14,11 +14,11 @@ export default function ResetSectionsModal({ show, onReset, onClose }: Props) {
         <Modal.Title>Reset Sections Tool</Modal.Title>
       </Modal.Header>
       <Modal.Body>
-        WARNING: This action will delete all of your course&apos;s sections, their
+        WARNING: This action will delete all of your course's sections, their
         sessions and attendance history, and every student and staff assignment
         to them. Students and staff stay in the course. This is
-        irreversible and should only be done in order to prepare sections tool
-        for a new semester. Be extremely cautious when using this button. You
+        irreversible and should only be done in order to prepare the Sections
+        tool for a new semester. Be extremely cautious when using this button. You
         have been warned.
       </Modal.Body>
       <Modal.Footer>
