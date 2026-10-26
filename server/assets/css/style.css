@@ -1,211 +1,140 @@
-/* Copied from seating (server/static/css/style.css) so the two apps look the same; keep them in sync. */
+/* Adapted from seating (server/static/css/style.css) so the two apps look the same;
+   keep them in sync. src/index.css applies the same colors to the course pages.
+
+   UC Berkeley colors (https://brand.berkeley.edu/visual-identity/colors/): Berkeley
+   Blue #003262 takes the place of Bootstrap's blue, and California Gold #FDB515
+   underlines the header. */
+:root {
+  --berkeley-blue: #003262;
+  --berkeley-blue-dark: #00243f;
+  --berkeley-blue-darker: #001a2e;
+  --berkeley-blue-light: #8098b0;
+  --california-gold: #fdb515;
+
+  --bs-primary: var(--berkeley-blue);
+  --bs-primary-rgb: 0, 50, 98;
+  --bs-primary-text-emphasis: var(--berkeley-blue-darker);
+  --bs-primary-bg-subtle: #ccd6e0;
+  --bs-primary-border-subtle: #99adc0;
+  --bs-link-color: var(--berkeley-blue);
+  --bs-link-color-rgb: 0, 50, 98;
+  --bs-link-hover-color: var(--berkeley-blue-dark);
+  --bs-link-hover-color-rgb: 0, 36, 63;
+  --bs-focus-ring-color: rgba(0, 50, 98, 0.25);
+}
+
+/* Bootstrap's components set their own copy of its blue rather than reading --bs-primary */
+.btn-primary {
+  --bs-btn-bg: var(--berkeley-blue);
+  --bs-btn-border-color: var(--berkeley-blue);
+  --bs-btn-hover-bg: var(--berkeley-blue-dark);
+  --bs-btn-hover-border-color: var(--berkeley-blue-dark);
+  --bs-btn-focus-shadow-rgb: 0, 50, 98;
+  --bs-btn-active-bg: var(--berkeley-blue-darker);
+  --bs-btn-active-border-color: var(--berkeley-blue-darker);
+  --bs-btn-disabled-bg: var(--berkeley-blue);
+  --bs-btn-disabled-border-color: var(--berkeley-blue);
+}
+
+.dropdown-menu {
+  --bs-dropdown-link-active-bg: var(--berkeley-blue);
+}
+
+.form-check-input:focus {
+  border-color: var(--berkeley-blue-light);
+  box-shadow: 0 0 0 0.25rem var(--bs-focus-ring-color);
+}
+
+.form-check-input:checked {
+  background-color: var(--berkeley-blue);
+  border-color: var(--berkeley-blue);
+}
+
+.nav-link:focus-visible {
+  box-shadow: 0 0 0 0.25rem var(--bs-focus-ring-color);
+}
+
+.btn-close {
+  --bs-btn-close-focus-shadow: 0 0 0 0.25rem var(--bs-focus-ring-color);
+}
 
 a {
-  color: #1976d2;
   text-decoration: none;
 }
 
-body {
-  color: #333;
-  background-color: #f7f7f7;
+/* Berkeley Blue is too close to the text color to mark a link on its own, so links
+   within a sentence are underlined too */
+p a {
+  text-decoration: underline;
 }
 
-header a {
-  color: inherit;
-  font-weight: inherit;
+.navbar.site-header {
+  border-bottom: 4px solid var(--california-gold);
+  /* Bootstrap's dark navbar dims its links to 55% white, too faint to read on the blue */
+  --bs-navbar-color: #fff;
+  --bs-navbar-hover-color: #fff;
+  --bs-navbar-active-color: #fff;
+}
+
+.site-header .nav-link:hover,
+.site-header .nav-link:focus-visible {
+  text-decoration: underline;
+  text-decoration-color: var(--california-gold);
+  text-decoration-thickness: 2px;
+  text-underline-offset: 4px;
+}
+
+.site-title {
+  margin: 0;
+  font-size: 1.25rem;
+}
+
+/* while the links are folded behind the menu button, the title takes the room left
+   beside it, so a long title wraps instead of pushing the button onto its own line */
+@media (max-width: 991.98px) {
+  .site-title {
+    flex: 1;
+    min-width: 0;
+  }
+}
+
+.site-title .navbar-brand {
+  white-space: normal;
+}
+
+.site-content {
+  padding: 16px 16px 10em;
+}
+
+/* pages that keep to a column in the middle of the screen */
+.landing,
+.main-container,
+.rooms {
+  margin: 0 auto;
+}
+
+.landing {
+  max-width: 840px;
 }
 
 .main-container {
-  /* margin: 0 auto;
-  padding: 20px 0; */
   max-width: 960px;
-  /* justify-content: center; */
-}
-
-.add-item {
-  /* Dropdown menu: creating new items */
-  border-bottom: 1px solid #e8e8e8;
-}
-
-.checkbox ul {
-  list-style-type: none;
-}
-
-.delist {
-  padding-left: 40px;
-}
-
-.delitem {
-  font-size: 14px;
-  line-height: 2px;
-  min-height: 0px;
-}
-
-.errormsg {
-  color: #ff0000;
-}
-
-.form-buttons {
-  padding: 20px 10px 5px 10px;
-}
-
-.material-icons.help {
-  margin-right: 30px;
-  padding-bottom: 0px;
-}
-
-.material-icons.std {
-  font-size: 30px;
-  margin-left: 30px;
-  padding-bottom: 0px;
-}
-
-.material-icons.std:hover {
-  cursor: pointer;
-  background-color: rgba(0, 0, 0, 0.12);
-  border-radius: 5px;
-}
-
-.mdl-layout__content {
-  padding-bottom: 10em;
 }
 
 .rooms {
   max-width: 620px;
 }
 
-.rooms li {
-  padding-left: 0;
+.checkbox ul {
+  list-style-type: none;
 }
 
-.roomspg-add-room-button {
-  padding-left: 0;
+.form-buttons {
+  padding: 20px 10px 5px 10px;
 }
 
-.room h1,
-.room h2,
-.room h3,
-.room h4,
-.room h5,
-.room h6 {
-  text-align: center;
-}
-
-.seats {
-  position: relative;
-  margin: 10px auto;
-}
-
-/*horizontal scrolling on mobile*/
-@media (max-width: 620px) {
-  .seats {
-    left: 15%;
-  }
-}
-
-.seat {
-  position: absolute;
-  border-radius: 50%;
-  width: 18px;
-  height: 18px;
-  border: 2px solid #555;
-  background-color: #ddd;
-  outline: 0;
-}
-
-.seat.highlight {
-  background-color: #ef5350;
-}
-
-.seat.occupied {
-  background-color: #64b5f6;
-}
-
-.seat:hover {
-  background-color: #ef5350;
-}
-
-.seat-label {
-  position: absolute;
-  width: 22px;
-  height: 22px;
-  line-height: 22px;
-  text-align: center;
+.offering-term {
+  min-width: 4.5em;
+  color: #424242;
   font-weight: bold;
-  font-size: 22px;
-  /* Seat names like "A 1" must stay on one line; the box is only 22px wide,
-     so a regular space would otherwise wrap the label onto a second line. */
-  white-space: nowrap;
-}
-
-.seat-tooltip:not(.is-active) {
-  display: none;
-}
-
-.seat-tooltip .photo {
-  display: inline-block;
-  width: 94px;
-  height: 125px;
-  margin: 5px;
-}
-
-.students {
-  max-width: 960px;
-}
-
-.students table {
-  width: 100%;
-  table-layout: fixed;
-}
-
-.students table td {
-  width: 50%;
-  text-overflow: ellipsis;
-}
-
-.student {
-  max-width: 620px;
-  text-align: center;
-}
-
-.student .photo {
-  width: 187px;
-  height: 250px;
-  margin: auto;
-}
-
-.sort {
-  cursor: pointer;
-}
-
-.sort:after {
-  display: inline-block;
-  position: relative;
-  width: 0;
-  height: 0;
-  top: -2px;
-  right: -5px;
-  content: "";
-  border-left: 5px solid transparent;
-  border-right: 5px solid transparent;
-}
-
-.sort.asc:after {
-  border-bottom: 5px solid #000;
-}
-
-.sort.desc:after {
-  border-top: 5px solid #000;
-}
-
-@media (max-width: 400px) {
-  .hidden-small {
-    display: none;
-  }
-}
-
-@media (max-width: 767px) {
-  .mdl-layout__header-row {
-    padding: 0 16px 0 16px;
-  }
 }
