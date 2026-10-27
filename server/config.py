@@ -81,4 +81,9 @@ def load_config(app: flask.Flask):
         SESSION_COOKIE_HTTPONLY=True,
         SESSION_COOKIE_SECURE=not is_dev,
         SESSION_COOKIE_SAMESITE="Lax",
+        # Flask-Login's year-long remember cookie, which signs a user back in, gets
+        # the same protection; without SameSite, some browsers send it with
+        # another site's form posts.
+        REMEMBER_COOKIE_SECURE=not is_dev,
+        REMEMBER_COOKIE_SAMESITE="Lax",
     )

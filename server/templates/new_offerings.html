@@ -11,12 +11,12 @@
         {% for canvas_id, info in candidates %}
           <li class="form-check">
             <input class="form-check-input" id="offerings-{{ loop.index0 }}" name="offerings" type="checkbox" value="{{ canvas_id }}">
-            <label class="form-check-label" for="offerings-{{ loop.index0 }}">{{ (info.start_at or "")[:7] }} | {{ info.code }} | {{ info.name }}</label>
+            <label class="form-check-label" for="offerings-{{ loop.index0 }}">{{ (info.start_at or "")[:7] or "No Date" }} | {{ info.code }} | {{ info.name }}</label>
           </li>
         {% endfor %}
       </ul>
     </div>
-    <div class="form-buttons"><input class="btn btn-primary" type="submit" value="import"></div>
+    <div class="form-buttons"><input class="btn btn-primary" type="submit" value="Import"></div>
   </form>
 </div>
 
