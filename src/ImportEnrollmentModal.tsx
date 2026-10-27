@@ -17,7 +17,7 @@ export default function ImportEnrollmentModal({ show, onClose }: Props) {
   const { pushMessage } = useContext(MessageContext);
   const state = useContext(StateContext);
   const importEnrollmentFromSheet = useAPI("import_enrollment_from_sheet", () =>
-    pushMessage("Import successful!")
+    pushMessage("Import successful!", "success")
   );
 
   return (

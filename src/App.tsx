@@ -16,7 +16,7 @@ import HistoryPage from "./HistoryPage";
 import MainPage from "./MainPage";
 
 import "bootstrap/dist/css/bootstrap.css";
-import MessageContext from "./MessageContext";
+import MessageContext, { type Message, type MessageVariant } from "./MessageContext";
 import Messages from "./Messages";
 import type { ID, Section, State } from "./models";
 import nullThrows from "./nullThrows";
@@ -36,10 +36,11 @@ function SectionRoute() {
 
 export default function App(): React.ReactNode {
   const [state, setState] = useState<State | null>(null);
-  const [messages, setMessages] = useState<Array<string>>([]);
+  const [messages, setMessages] = useState<Array<Message>>([]);
 
   const pushMessage = useCallback(
-    (message: string) => setMessages((currMessages) => currMessages.concat([message])),
+    (text: string, variant: MessageVariant = "danger") =>
+      setMessages((currMessages) => currMessages.concat([{ text, variant }])),
     []
   );
 
