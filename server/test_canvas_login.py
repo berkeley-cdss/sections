@@ -8,7 +8,7 @@ from sqlalchemy.exc import NoResultFound
 
 from offerings import create_offering_pages
 from login import complete_login, create_login_client
-from import_sheet import import_enrollment, parse_time_string
+from import_sheet import import_enrollment, import_sections, parse_time_string
 from models import Attendance, AttendanceStatus, Offering, Section, Session, User, db, set_contains
 from state import create_state_client
 
@@ -447,6 +447,21 @@ class CanvasLoginTests(unittest.TestCase):
         db.session.remove()
         sections = {s.id for s in db.session.get(User, self.known_id).sections}
         self.assertEqual(sections, {self.section_id, self.data8_section_id})
+
+    def test_sheet_times_are_integers(self):
+        # Section times are Integer columns. Postgres rejects a float such as
+        # 1629817200.0; SQLite silently stores it, so check before it's saved.
+        self.assertEqual(parse_time_string("T", "08:00a"), 1629817200)  # Tue 2021-08-24 8am PDT
+        with self.app.test_request_context(), patch.object(db.session, "commit"):
+            g.offering = Offering.query.filter_by(canvas_id=CS61A).one()
+            import_sections(iter([
+                ["Email", "Name", "Capacity", "Location", "Day", "Start", "End", "Tags", "Can Self Enroll", "Type"],
+                ["staff@test", "Staff", "35", "The Moon", "T", "08:00a", "09:30p", "", "TRUE", "Lab"],
+            ]))
+            [section] = [s for s in db.session.new if isinstance(s, Section)]
+            self.assertEqual((section.start_time, section.end_time), (1629817200, 1629865800))
+            self.assertIs(type(section.start_time), int)
+            self.assertIs(type(section.end_time), int)
 
     def test_email_lookups_ignore_case(self):
         with patch("state.canvas_service.get_student_from_email") as lookup:

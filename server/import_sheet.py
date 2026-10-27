@@ -20,14 +20,15 @@ def parse_time_string(day, time):
     day_offset = ["M", "T", "W", "Th", "F"].index(day)
     hour_offset = 12 if hour != 12 and ampm == "p" else 0
 
-    return datetime(
+    # Section times are Integer columns; Postgres rejects a float like 1629817200.0.
+    return int(datetime(
         year=2021,
         month=8,
         day=23 + day_offset,
         hour=hour + hour_offset,
         minute=min,
         tzinfo=pst
-    ).timestamp()
+    ).timestamp())
 
 
 def header_field(col_name: str):
