@@ -2,7 +2,7 @@
 
 import click
 import flask
-from flask import Blueprint, flash, redirect, render_template, request, url_for
+from flask import Blueprint, abort, flash, redirect, render_template, request, url_for
 from flask_login import current_user, login_required
 
 from models import Offering, db
@@ -84,6 +84,30 @@ def create_offering_pages(app: flask.Flask):
             return redirect(url_for("offerings"))
         rows = sorted(candidates.items(), key=lambda item: (item[1]["start_at"] or "", item[1]["name"]), reverse=True)
         return render_template("new_offerings.html", title="Add New Course Offerings", candidates=rows)
+
+    @app.route("/offerings/<int:canvas_id>/remove", methods=["POST"])
+    @login_required
+    def remove_offering(canvas_id):
+        """Take an offering off Sections, like seating's delete, but keep its
+        sections and attendance: they're stored under its key, not linked to the
+        Offering row, so importing the course again brings them back."""
+        offering = Offering.query.filter_by(canvas_id=canvas_id).first_or_404()
+        info = current_user.canvas_courses.get(str(canvas_id))
+        if not (current_user.is_global_admin or (info and info["is_staff"])):
+            abort(403, "You are not a staff member in this offering.")
+        # Read before the delete expires them.
+        key, name, display_name = offering.key, offering.name, offering.display_name
+        db.session.delete(offering)
+        db.session.commit()
+        if key == str(canvas_id):
+            flash(f"Removed {display_name}. Its sections and attendance are kept; "
+                  "import it again to restore them.", "success")
+        else:
+            # Linked from the monorepo: importing would start over under a new key.
+            flash(f"Removed {display_name}. Its sections and attendance are kept under "
+                  f"'{key}'; to restore them, run: flask link-offering {canvas_id} {key} \"{name}\"",
+                  "success")
+        return redirect(url_for("offerings"))
 
     @app.cli.command("link-offering")
     @click.argument("canvas_id", type=int)
