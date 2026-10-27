@@ -227,6 +227,9 @@ class User(db.Model, UserMixin):
     canvas_id: str = db.Column(db.String(255), unique=True, index=True, nullable=True)
     # Staff and admin in every offering (member of ADMIN_OVERRIDE_CANVAS_COURSE_ID).
     is_global_admin: bool = db.Column(db.Boolean, nullable=False, default=False)
+    # As shared through CalCentral/UCPath and reported by Canvas at login; None if
+    # the person hasn't shared any (or hasn't logged in).
+    pronouns: str = db.Column(db.String(255), nullable=True)
     # Active Canvas courses at last login, keyed by str(canvas course id):
     # {"name", "code", "start_at", "is_staff", "is_admin", "is_student"}.
     canvas_courses: dict = db.Column(db.JSON, nullable=False, default=dict)
@@ -327,6 +330,7 @@ class User(db.Model, UserMixin):
         return {
             "id": self.id,
             "name": self.name,
+            "pronouns": self.pronouns,
             "email": self.email,
             "isStaff": self.is_staff,
             "isAdmin": self.is_admin,
@@ -346,6 +350,7 @@ class User(db.Model, UserMixin):
             return {
                 "id": randrange(10**6),
                 "name": "Anon Student",
+                "pronouns": None,
                 "email": "",
                 "isStaff": False,
                 "isAdmin": False,

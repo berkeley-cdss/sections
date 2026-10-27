@@ -1,5 +1,6 @@
 import moment from "moment-timezone";
 import * as React from "react";
+import Pronouns from "./Pronouns";
 
 export type ID = string;
 export type Time = number;
@@ -9,7 +10,8 @@ export type Person = {
   name: string;
   email: string;
   isStaff: boolean;
-  preferredName?: string | null;
+  // As shared in bCourses; null if the person doesn't share them.
+  pronouns?: string | null;
 };
 
 export type Section = {
@@ -100,7 +102,15 @@ export function sectionTitle(section: Section | null | undefined): React.ReactEl
     <>Deleted Section</>
   ) : (
     <>
-      {section.staff == null ? "Unknown TA" : `${section.staff.name}'s section`}{" "}
+      {section.staff == null ? (
+        "Unknown TA"
+      ) : (
+        <>
+          {section.staff.name}
+          <Pronouns of={section.staff} />
+          &apos;s section
+        </>
+      )}{" "}
     </>
   );
 }

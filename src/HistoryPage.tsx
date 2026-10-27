@@ -8,6 +8,7 @@ import Container from "react-bootstrap/Container";
 import Row from "react-bootstrap/Row";
 import { Link, Navigate } from "react-router-dom";
 import AttendanceRow from "./AttendanceRow";
+import Pronouns from "./Pronouns";
 import type { ID, PersonDetails } from "./models";
 import { sectionTitle } from "./models";
 import StateContext from "./StateContext";
@@ -44,7 +45,10 @@ export default function HistoryPage({ userID }: Props): React.ReactNode {
       <br />
       <Row>
         <Col>
-          <h2>{user.name}</h2>
+          <h2>
+            {user.name}
+            <Pronouns of={user} />
+          </h2>
 
           {userID == null && (
             <p>

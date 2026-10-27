@@ -4,6 +4,7 @@ import Card from "react-bootstrap/Card";
 import { Link, Navigate } from "react-router-dom";
 import styled from "styled-components";
 import AddStudentModal from "./AddStudentModal";
+import Pronouns from "./Pronouns";
 import type { SectionDetails } from "./models";
 import StateContext from "./StateContext";
 import useAPI from "./useStateAPI";
@@ -82,6 +83,7 @@ export default function SectionRoster({ section }: Props) {
               <Card.Body>
                 <Card.Title>
                   <Link to={`/user/${student.id}`}>{student.name}</Link>
+                  <Pronouns of={student} />
                 </Card.Title>
                 <Card.Text>
                   <a href={`mailto:${student.email}`}>{student.email}</a>
