@@ -10,16 +10,20 @@
   --berkeley-blue-darker: #001a2e;
   --berkeley-blue-light: #8098b0;
   --california-gold: #fdb515;
+  /* Founders Rock (#3b7ea1), a shade darker so that links have 4.5:1 contrast with the
+     white page (WCAG 2.1 AA) and 3:1 with the body text, so they stand out from it
+     without an underline. Berkeley Blue was too close to the text. */
+  --link-blue: #39799b;
 
   --bs-primary: var(--berkeley-blue);
   --bs-primary-rgb: 0, 50, 98;
   --bs-primary-text-emphasis: var(--berkeley-blue-darker);
   --bs-primary-bg-subtle: #ccd6e0;
   --bs-primary-border-subtle: #99adc0;
-  --bs-link-color: var(--berkeley-blue);
-  --bs-link-color-rgb: 0, 50, 98;
-  --bs-link-hover-color: var(--berkeley-blue-dark);
-  --bs-link-hover-color-rgb: 0, 36, 63;
+  --bs-link-color: var(--link-blue);
+  --bs-link-color-rgb: 57, 121, 155;
+  --bs-link-hover-color: var(--berkeley-blue);
+  --bs-link-hover-color-rgb: 0, 50, 98;
   --bs-focus-ring-color: rgba(0, 50, 98, 0.25);
 }
 
@@ -62,8 +66,7 @@ a {
   text-decoration: none;
 }
 
-/* Berkeley Blue is too close to the text color to mark a link on its own, so links
-   within a sentence are underlined too */
+/* links within a sentence are underlined too, so they don't rely on color alone */
 p a {
   text-decoration: underline;
 }

@@ -100,10 +100,8 @@ export default function App(): React.ReactNode {
           </Navbar.Brand>
           <Navbar.Toggle aria-controls="navbar" />
           <Navbar.Collapse id="navbar">
+            {/* The brand links to the course's home page. */}
             <Nav className="me-auto">
-              <Link to="/" className="nav-link active">
-                Home
-              </Link>
               {state.currentUser?.isStaff === false && (
                 <Link to="/history" className="nav-link active">
                   History
@@ -130,9 +128,12 @@ export default function App(): React.ReactNode {
               )}
             </Nav>
             <Nav className="me-sm-2">
+              {/* Outside the course's router: the server-rendered list of offerings. */}
+              <Nav.Link href="/offerings" active>
+                Offerings
+              </Nav.Link>
               {state.currentUser != null ? (
                 <NavDropdown title={state.currentUser.name} active align="end">
-                  <NavDropdown.Item href="/offerings">All courses</NavDropdown.Item>
                   <NavDropdown.Item href="/logout/">Log out</NavDropdown.Item>
                 </NavDropdown>
               ) : null}

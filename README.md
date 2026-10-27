@@ -21,7 +21,7 @@ Requires Python 3.14 and Node 24 (`mise install` picks both up from `mise.toml`)
 
 One deployment serves every bCourses course, with the same routes as seating. Users log in through Canvas OAuth (`/login/`, which returns to `/authorized/`), and `/offerings` lists their courses. Each course offering lives under `/offerings/<canvas course id>/`. Roles come from each Canvas enrollment at sign-in: Teachers and TAs are staff, and Teachers and Lead TAs are admins. Members of the `ADMIN_OVERRIDE_CANVAS_COURSE_ID` course are staff and admin everywhere. Someone added to a course after signing in needs to sign out and in again.
 
-Course staff set up Sections for a course with "Import courses from canvas" (`/offerings/new`). Offerings moved from the monorepo store their data under an old key (`cs61a`, `data8`, ...); link each one to its Canvas course with `flask --app main link-offering <canvas id> <key> "<name>"`, run from `server/` against that database.
+Course staff set up Sections for a course with "Import courses from Canvas" (`/offerings/new`). Offerings moved from the monorepo store their data under an old key (`cs61a`, `data8`, ...); link each one to its Canvas course with `flask --app main link-offering <canvas id> <key> "<name>"`, run from `server/` against that database.
 
 To sign in locally, open `localhost:3000/offerings` and log in. This works on port 3000 if the sandbox developer key allows `http://localhost:3000/authorized/` as a redirect URI. Otherwise, log in at `localhost:8000/login/` instead, then go back to `localhost:3000`. A "template not found" error for course pages on port 8000 is expected, because the built frontend isn't served in development.
 
@@ -40,7 +40,7 @@ bCourses API keys have strict scope and permissions. bCourses API keys should on
 ## Import Test Sections Locally
 
 1. Start the server and front end.
-2. Set up your sandbox course, either by signing in and using "Import courses from canvas" on `localhost:3000/offerings`, or with `python3 seed.py 157` from `server/` (157 is Mango 101 on the sandbox; this also adds demo sections).
+2. Set up your sandbox course, either by signing in and using "Import courses from Canvas" on `localhost:3000/offerings`, or with `python3 seed.py 157` from `server/` (157 is Mango 101 on the sandbox; this also adds demo sections).
 3. From the `server` directory, import example sections and enrollment into that course:
 
 ```

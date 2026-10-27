@@ -1,14 +1,21 @@
 {% extends 'base.html' %}
 
-{% macro offering_row(offering, link=true) %}
+{% macro offering_row(offering, link=true, removable=false) %}
   <li class="list-group-item d-flex align-items-center gap-3">
-    <small class="offering-term">{{ offering.start_month }}</small>
+    <small class="offering-term">{{ offering.start_month or "No Date" }}</small>
     {% if link %}
       <a class="item-link flex-grow-1" href="/offerings/{{ offering.canvas_id }}/">
         {{ offering.name }}
       </a>
     {% else %}
       <span class="flex-grow-1">{{ offering.name }}</span>
+    {% endif %}
+    {% if removable %}
+      {# a form, not seating's link, so that only a deliberate click removes it #}
+      <form method="post" action="{{ url_for('remove_offering', canvas_id=offering.canvas_id) }}"
+            onsubmit="return confirm('Remove this offering from Sections? Its sections and attendance are kept, and come back if it is imported again.');">
+        <button type="submit" class="btn-close" aria-label="Remove {{ offering.name }}"></button>
+      </form>
     {% endif %}
   </li>
 {% endmacro %}
@@ -25,11 +32,11 @@
     </li>
   {% endif %}
   {% for offering in staff_offerings_existing %}
-    {{ offering_row(offering) }}
+    {{ offering_row(offering, removable=true) }}
   {% endfor %}
   </ul>
   <div class="text-center mb-4">
-    <a class="btn btn-primary" href="{{ url_for('add_offerings') }}">Import courses from canvas</a>
+    <a class="btn btn-primary" href="{{ url_for('add_offerings') }}">Import courses from Canvas</a>
   </div>
   <h2 class="h4">Student Course Offerings</h2>
   <p>The following course offerings that you are a student of already have Sections set up. You can now join sections and view your attendance. If you expect to see a course here but it is not here, your course staff have not yet set up Sections for the course. Contact your course staff.
