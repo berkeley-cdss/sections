@@ -17,7 +17,7 @@ export default function ImportSectionsModal({ show, onClose }: Props) {
   const { pushMessage } = useContext(MessageContext);
   const state = useContext(StateContext);
   const importSectionsFromSheet = useAPI("import_sections_from_sheet", () =>
-    pushMessage("Import successful!")
+    pushMessage("Import successful!", "success")
   );
 
   return (

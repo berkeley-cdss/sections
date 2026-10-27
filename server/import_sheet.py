@@ -20,14 +20,15 @@ def parse_time_string(day, time):
     day_offset = ["M", "T", "W", "Th", "F"].index(day)
     hour_offset = 12 if hour != 12 and ampm == "p" else 0
 
-    return datetime(
+    # Section times are Integer columns; Postgres rejects a float like 1629817200.0.
+    return int(datetime(
         year=2021,
         month=8,
         day=23 + day_offset,
         hour=hour + hour_offset,
         minute=min,
         tzinfo=pst
-    ).timestamp()
+    ).timestamp())
 
 
 def header_field(col_name: str):
@@ -132,7 +133,8 @@ def import_sections_from_url(url: str):
         )
     except Exception:
         raise Failure(
-            "Unable to read spreadsheet. Make sure to put your data in a sheet named 'Sections'"
+            "Unable to read spreadsheet. Make sure to put your data in a sheet named 'Sections' "
+            "and ensure the sheet is visible to anyone with the link."
         )
 
     import_sections(iter(reader))
@@ -190,7 +192,8 @@ def import_enrollment_from_url(url: str):
         )
     except Exception:
         raise Failure(
-            "Unable to read spreadsheet. Make sure to put your data in a sheet named 'Enrollment'"
+            "Unable to read spreadsheet. Make sure to put your data in a sheet named 'Enrollment' "
+            "and ensure the sheet is visible to anyone with the link."
         )
 
     import_enrollment(iter(reader))

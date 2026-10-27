@@ -1,8 +1,9 @@
 import Alert from "react-bootstrap/Alert";
+import type { Message } from "./MessageContext";
 
 type Props = {
-  messages: Array<string>;
-  onChange: (messages: Array<string>) => void;
+  messages: Array<Message>;
+  onChange: (messages: Array<Message>) => void;
 };
 
 export default function Messages({ messages, onChange }: Props) {
@@ -12,12 +13,12 @@ export default function Messages({ messages, onChange }: Props) {
     <>
       {messages.map((message, i) => (
         <Alert
-          variant="danger"
+          variant={message.variant}
           onClose={() => hideMessage(i)}
           dismissible
           key={i}
         >
-          {message}
+          {message.text}
         </Alert>
       ))}
     </>
