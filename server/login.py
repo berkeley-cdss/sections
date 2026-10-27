@@ -132,7 +132,9 @@ def create_login_client(app: flask.Flask):
         try:
             token = canvas.authorize_access_token()
         except OAuthError as e:
-            return f"Access denied: {escape(e.description or e.error)}", 403
+            # The error is copied from the `error`/`error_description` query parameters, which anyone
+            # can put in a link, and a returned str is served as HTML: escape it.
+            return f"Access denied: {escape(e.description or e.error or 'unknown error')}", 403
         complete_login(token)
         return redirect(session.pop(AFTER_LOGIN_KEY, None) or url_for("offerings"))
 

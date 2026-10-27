@@ -9,6 +9,7 @@ from config import load_config
 from offerings import create_offering_pages
 from login import create_login_client
 from models import db
+from security_headers import add_security_headers
 from state import create_state_client
 
 app = Flask(
@@ -32,6 +33,7 @@ Migrate(app, db, directory=os.path.join(os.path.dirname(os.path.abspath(__file__
 create_state_client(app)
 create_login_client(app)
 create_offering_pages(app)
+add_security_headers(app)
 
 
 @app.route("/health")
