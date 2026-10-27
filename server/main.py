@@ -16,6 +16,8 @@ app = Flask(
 )
 app.url_map.strict_slashes = False
 # Offering pages are the React build in static/; server-rendered pages live in templates/.
+# static/ is searched first, so templates/ must not reuse the build's names (hence landing.html,
+# not index.html). Name templates *.html so that Flask autoescapes them.
 app.jinja_loader = ChoiceLoader([
     app.jinja_loader,
     FileSystemLoader(os.path.join(os.path.dirname(os.path.abspath(__file__)), "templates")),

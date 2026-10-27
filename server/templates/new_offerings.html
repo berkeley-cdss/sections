@@ -1,0 +1,23 @@
+{% extends 'base.html' %}
+
+{% block body %}
+
+<div class="main-container">
+  <h2 class="h5">Choose courses to set up Sections with:</h2>
+  <p>If you expect to see an offering but it is not listed, please make sure its corresponding Canvas course exists and is active, then log out and log in again.</p>
+  <form method="post">
+    <div class="checkbox">
+      <ul id="offerings">
+        {% for canvas_id, info in candidates %}
+          <li class="form-check">
+            <input class="form-check-input" id="offerings-{{ loop.index0 }}" name="offerings" type="checkbox" value="{{ canvas_id }}">
+            <label class="form-check-label" for="offerings-{{ loop.index0 }}">{{ (info.start_at or "")[:7] }} | {{ info.code }} | {{ info.name }}</label>
+          </li>
+        {% endfor %}
+      </ul>
+    </div>
+    <div class="form-buttons"><input class="btn btn-primary" type="submit" value="import"></div>
+  </form>
+</div>
+
+{% endblock %}

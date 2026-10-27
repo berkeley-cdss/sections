@@ -1,0 +1,61 @@
+{% extends 'base.html' %}
+
+{% macro offering_row(offering, link=true) %}
+  <li class="list-group-item d-flex align-items-center gap-3">
+    <small class="offering-term">{{ offering.start_month }}</small>
+    {% if link %}
+      <a class="item-link flex-grow-1" href="/offerings/{{ offering.canvas_id }}/">
+        {{ offering.name }}
+      </a>
+    {% else %}
+      <span class="flex-grow-1">{{ offering.name }}</span>
+    {% endif %}
+  </li>
+{% endmacro %}
+
+{% block body %}
+<section class="rooms">
+  <h2 class="h4">Staff Course Offerings</h2>
+  <p>The following course offerings that you are a staff member of already have Sections set up. You can now manage their sections. You can add more courses you are a staff member of by clicking the button below.
+  </p>
+  <ul class="list-group mb-3">
+  {% if staff_offerings_existing == [] %}
+    <li class="list-group-item">
+      You are not a staff member in any course offerings with Sections set up.
+    </li>
+  {% endif %}
+  {% for offering in staff_offerings_existing %}
+    {{ offering_row(offering) }}
+  {% endfor %}
+  </ul>
+  <div class="text-center mb-4">
+    <a class="btn btn-primary" href="{{ url_for('add_offerings') }}">Import courses from canvas</a>
+  </div>
+  <h2 class="h4">Student Course Offerings</h2>
+  <p>The following course offerings that you are a student of already have Sections set up. You can now join sections and view your attendance. If you expect to see a course here but it is not here, your course staff have not yet set up Sections for the course. Contact your course staff.
+  </p>
+  <ul class="list-group mb-4">
+  {% if student_offerings_existing == [] %}
+    <li class="list-group-item">
+      You are not a student in any course offerings with Sections set up.
+    </li>
+  {% endif %}
+  {% for offering in student_offerings_existing %}
+    {{ offering_row(offering) }}
+  {% endfor %}
+  </ul>
+  <h2 class="h4">Other Course Offerings</h2>
+  <p>In the following course offerings you are neither a staff member nor a student, but Sections has been set up. You cannot do anything with these offerings.
+  </p>
+  <ul class="list-group mb-4">
+  {% if other_offerings_existing == [] %}
+    <li class="list-group-item">
+      There are no other course offerings with Sections set up.
+    </li>
+  {% endif %}
+  {% for offering in other_offerings_existing %}
+    {{ offering_row(offering, link=false) }}
+  {% endfor %}
+  </ul>
+</section>
+{% endblock %}

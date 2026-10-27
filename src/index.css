@@ -18,11 +18,74 @@ code {
   margin: 0 12px;
 }
 
-/* Keep Bootstrap 4's look after the Bootstrap 5 upgrade. */
+/* UC Berkeley colors, as on the server-rendered pages (server/assets/css/style.css)
+   and in seating: Berkeley Blue #003262 takes the place of Bootstrap's blue, and
+   California Gold #FDB515 underlines the header. */
+:root {
+  --berkeley-blue: #003262;
+  --berkeley-blue-dark: #00243f;
+  --berkeley-blue-darker: #001a2e;
+  --berkeley-blue-light: #8098b0;
+  --california-gold: #fdb515;
 
-/* Bootstrap 5's "info" is a much brighter cyan; this is Bootstrap 4's. */
+  --bs-primary: var(--berkeley-blue);
+  --bs-primary-rgb: 0, 50, 98;
+  --bs-link-color: var(--berkeley-blue);
+  --bs-link-color-rgb: 0, 50, 98;
+  --bs-link-hover-color: var(--berkeley-blue-dark);
+  --bs-link-hover-color-rgb: 0, 36, 63;
+  --bs-focus-ring-color: rgba(0, 50, 98, 0.25);
+}
+
+/* Bootstrap's components set their own copy of its blue rather than reading --bs-primary */
+.btn-primary {
+  --bs-btn-bg: var(--berkeley-blue);
+  --bs-btn-border-color: var(--berkeley-blue);
+  --bs-btn-hover-bg: var(--berkeley-blue-dark);
+  --bs-btn-hover-border-color: var(--berkeley-blue-dark);
+  --bs-btn-focus-shadow-rgb: 0, 50, 98;
+  --bs-btn-active-bg: var(--berkeley-blue-darker);
+  --bs-btn-active-border-color: var(--berkeley-blue-darker);
+  --bs-btn-disabled-bg: var(--berkeley-blue);
+  --bs-btn-disabled-border-color: var(--berkeley-blue);
+}
+
+.nav-tabs {
+  --bs-nav-link-color: var(--berkeley-blue);
+  --bs-nav-link-hover-color: var(--berkeley-blue-dark);
+}
+
+.dropdown-menu {
+  --bs-dropdown-link-active-bg: var(--berkeley-blue);
+}
+
+.form-control:focus,
+.form-check-input:focus {
+  border-color: var(--berkeley-blue-light);
+  box-shadow: 0 0 0 0.25rem var(--bs-focus-ring-color);
+}
+
+.form-check-input:checked {
+  background-color: var(--berkeley-blue);
+  border-color: var(--berkeley-blue);
+}
+
+/* The header, as on the server-rendered pages. */
 .navbar-sections {
-  background-color: #17a2b8;
+  background-color: var(--berkeley-blue);
+  border-bottom: 4px solid var(--california-gold);
+  /* Bootstrap's dark navbar dims its links to 55% white, too faint to read on the blue */
+  --bs-navbar-color: #fff;
+  --bs-navbar-hover-color: #fff;
+  --bs-navbar-active-color: #fff;
+}
+
+.navbar-sections .nav-link:hover,
+.navbar-sections .nav-link:focus-visible {
+  text-decoration: underline;
+  text-decoration-color: var(--california-gold);
+  text-decoration-thickness: 2px;
+  text-underline-offset: 4px;
 }
 
 /* Bootstrap 5 underlines links by default; Bootstrap 4 only did on hover. */

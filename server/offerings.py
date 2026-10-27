@@ -43,14 +43,14 @@ def create_offering_pages(app: flask.Flask):
     def index():
         if current_user.is_authenticated:
             return redirect(url_for("offerings"))
-        return render_template("index.html.j2", title="Sections")
+        return render_template("landing.html", title="Sections")
 
     @app.route("/offerings")
     @login_required
     def offerings():
         staff, students, other = _categorized_offerings(current_user)
         return render_template(
-            "select_offering.html.j2",
+            "select_offering.html",
             title="Select a Course Offering",
             staff_offerings_existing=staff,
             student_offerings_existing=students,
@@ -83,7 +83,7 @@ def create_offering_pages(app: flask.Flask):
             flash(f"Imported {len(chosen)} course offerings.", "success")
             return redirect(url_for("offerings"))
         rows = sorted(candidates.items(), key=lambda item: (item[1]["start_at"] or "", item[1]["name"]), reverse=True)
-        return render_template("new_offerings.html.j2", title="Add New Course Offerings", candidates=rows)
+        return render_template("new_offerings.html", title="Add New Course Offerings", candidates=rows)
 
     @app.cli.command("link-offering")
     @click.argument("canvas_id", type=int)
