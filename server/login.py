@@ -3,15 +3,26 @@ import time
 import flask
 from authlib.integrations.base_client import OAuthError
 from authlib.integrations.flask_client import OAuth
-from flask import abort, current_app, redirect, request, session, url_for
+from flask import abort, current_app, g, jsonify, redirect, render_template, request, session, url_for
 from flask_login import LoginManager, login_user, logout_user
 from markupsafe import escape
+from werkzeug.exceptions import Forbidden
 
 import canvas_service
 from offering import current_offering, in_offering
 from models import User, db, with_email
 
 AFTER_LOGIN_KEY = "after_login"
+NOT_ENROLLED = ("You aren't enrolled in this course on bCourses. If you just enrolled, "
+                "sign out and sign in again.")
+
+
+class NotEnrolled(Forbidden):
+    """A signed-in user opened an offering whose bCourses course they aren't enrolled in."""
+
+    def __init__(self, user: User):
+        super().__init__(NOT_ENROLLED)
+        self.user = user
 
 
 def _safe_next(target):
@@ -86,9 +97,26 @@ def sync_offering_role(user: User) -> bool:
     return True
 
 
+def _not_enrolled_page(e: NotEnrolled):
+    if "/api/" in request.path:
+        return jsonify({"success": False, "message": NOT_ENROLLED}), 403
+    offering = current_offering()
+    # The user loader raised this, so loading current_user to render the page would raise it
+    # again. Give Flask-Login the user directly (it keeps the request's user on g), so the nav
+    # shows who is signed in and how to sign out.
+    g._login_user = e.user
+    return render_template(
+        "not_enrolled.html",
+        title=f"{offering.display_name} Sections",
+        course=offering.display_name,
+        bcourses_url=f"{current_app.config['CANVAS_SERVER_URL']}courses/{offering.canvas_id}",
+    ), 403
+
+
 def create_login_client(app: flask.Flask):
     login_manager = LoginManager()
     login_manager.init_app(app)
+    app.register_error_handler(NotEnrolled, _not_enrolled_page)
 
     oauth = OAuth(app)
     canvas_server_url = app.config["CANVAS_SERVER_URL"]
@@ -110,8 +138,7 @@ def create_login_client(app: flask.Flask):
         user_id = User.parse_session_id(session_id)
         user = db.session.get(User, user_id) if user_id else None
         if user is not None and in_offering() and not sync_offering_role(user):
-            abort(403, "You aren't enrolled in this course on bCourses. If you just "
-                       "enrolled, sign out and sign in again.")
+            raise NotEnrolled(user)
         return user
 
     @login_manager.unauthorized_handler

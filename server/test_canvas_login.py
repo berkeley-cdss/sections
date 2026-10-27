@@ -355,6 +355,23 @@ class CanvasLoginTests(unittest.TestCase):
         self.assertEqual(self.api("refresh_state", DATA8).status_code, 403)
         self.assertEqual(self.get(f"/offerings/{DATA8}/").status_code, 403)
 
+    def test_not_enrolled_page_names_the_course_and_how_to_get_in(self):
+        response = self.get(f"/offerings/{DATA8}/")
+        self.assertEqual(response.status_code, 403)
+        page = response.get_data(as_text=True)
+        self.assertIn("We couldn't find your enrollment information for DATA 8.", page)
+        self.assertIn(f'href="https://canvas.test/courses/{DATA8}"', page)
+        self.assertIn("reach out to course staff", page)
+        # the nav still shows who is signed in, with the sign-out and Offerings links
+        self.assertIn('href="/logout/"', page)
+        self.assertIn('href="/offerings"', page)
+        self.assertIn(">\n                  Staff\n", page)
+        # the APIs answer in the shape the React app reads
+        response = self.api("refresh_state", DATA8)
+        self.assertEqual(response.status_code, 403)
+        self.assertEqual(response.get_json()["success"], False)
+        self.assertIn("aren't enrolled in this course", response.get_json()["message"])
+
     def test_one_person_in_two_offerings_sees_each_separately(self):
         known = self.enroll_known_in_data8()
         known.sections.append(db.session.get(Section, self.section_id))

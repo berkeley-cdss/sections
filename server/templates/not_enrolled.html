@@ -1,0 +1,16 @@
+{% extends 'base.html' %}
+
+{% block body %}
+<div class="landing">
+  <h2 class="my-4">We couldn't find your enrollment information for {{ course }}.</h2>
+  <p>
+    Check that you can access the <a href="{{ bcourses_url }}">bCourses page for {{ course }}</a> and
+    reach out to course staff. If you can't access bCourses for {{ course }}, you won't be able to
+    access this site.
+  </p>
+  <p>
+    If you just enrolled, <a href="{{ url_for('logout') }}">sign out</a> and sign in again.
+  </p>
+  <a href="{{ url_for('offerings') }}" class="btn btn-primary">Back to Offerings</a>
+</div>
+{% endblock %}
