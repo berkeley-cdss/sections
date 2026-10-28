@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import * as React from "react";
+import Button from "react-bootstrap/Button";
 import Container from "react-bootstrap/Container";
 
 import Nav from "react-bootstrap/Nav";
@@ -35,7 +36,6 @@ function SectionRoute() {
 }
 
 export default function App(): React.ReactNode {
-  const [state, setState] = useState<State | null>(null);
   const [messages, setMessages] = useState<Array<Message>>([]);
 
   const pushMessage = useCallback(
@@ -43,6 +43,23 @@ export default function App(): React.ReactNode {
       setMessages((currMessages) => currMessages.concat([{ text, variant }])),
     []
   );
+
+  // Provided above CourseApp so that its own API calls, including the first
+  // load, can show their errors.
+  return (
+    <MessageContext.Provider value={{ pushMessage }}>
+      <CourseApp messages={messages} setMessages={setMessages} />
+    </MessageContext.Provider>
+  );
+}
+
+type CourseAppProps = {
+  messages: Array<Message>;
+  setMessages: (messages: Array<Message>) => void;
+};
+
+function CourseApp({ messages, setMessages }: CourseAppProps): React.ReactNode {
+  const [state, setState] = useState<State | null>(null);
 
   const updateState = (newState: State) => {
     // preserve ordering of sections, if possible
@@ -75,6 +92,17 @@ export default function App(): React.ReactNode {
       refreshState();
     }
   }, [state, refreshState]);
+
+  if (state == null && messages.length > 0) {
+    // The first load failed; its error is in messages.
+    return (
+      <Container className="my-5">
+        <h2 className="h4">Couldn&apos;t load Sections</h2>
+        <Messages messages={messages} onChange={setMessages} />
+        <Button onClick={() => window.location.reload()}>Reload</Button>
+      </Container>
+    );
+  }
 
   if (state == null) {
     return (
@@ -144,19 +172,17 @@ export default function App(): React.ReactNode {
       </Navbar>
       <Messages messages={messages} onChange={setMessages} />
       <StateContext.Provider value={{ ...state, updateState }}>
-        <MessageContext.Provider value={{ pushMessage }}>
-          <Routes>
-            <Route path="/" element={<MainPage />} />
-            <Route path="/history" element={<HistoryPage />} />
-            <Route path="/user/:id" element={<UserHistoryRoute />} />
-            <Route path="/lab" element={<LabPage />} />
-            <Route path="/disc" element={<DiscPage />} />
-            <Route path="/tutoring" element={<TutoringPage />} />
-            <Route path="/admin" element={<AdminPage />} />
-            <Route path="/section/:id" element={<SectionRoute />} />
-            <Route path="*" element={<Container>Error: Page not found</Container>} />
-          </Routes>
-        </MessageContext.Provider>
+        <Routes>
+          <Route path="/" element={<MainPage />} />
+          <Route path="/history" element={<HistoryPage />} />
+          <Route path="/user/:id" element={<UserHistoryRoute />} />
+          <Route path="/lab" element={<LabPage />} />
+          <Route path="/disc" element={<DiscPage />} />
+          <Route path="/tutoring" element={<TutoringPage />} />
+          <Route path="/admin" element={<AdminPage />} />
+          <Route path="/section/:id" element={<SectionRoute />} />
+          <Route path="*" element={<Container>Error: Page not found</Container>} />
+        </Routes>
       </StateContext.Provider>
     </Router>
   );

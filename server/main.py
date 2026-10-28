@@ -6,6 +6,7 @@ from jinja2 import ChoiceLoader, FileSystemLoader
 from werkzeug.middleware.proxy_fix import ProxyFix
 
 from config import load_config
+from errors import register_error_handlers
 from offerings import create_offering_pages
 from login import create_login_client
 from models import db
@@ -34,6 +35,7 @@ create_state_client(app)
 create_login_client(app)
 create_offering_pages(app)
 add_security_headers(app)
+register_error_handlers(app)
 
 
 @app.route("/health")

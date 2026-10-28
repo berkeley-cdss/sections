@@ -1,0 +1,11 @@
+{% extends 'base.html' %}
+{% set hide_account = true %}
+
+{% block body %}
+<div class="landing">
+  <p class="lead">{{ message }}</p>
+  <div class="text-center">
+    <a href="{{ url_for('index') }}" class="btn btn-primary">Back to Sections</a>
+  </div>
+</div>
+{% endblock %}

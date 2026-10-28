@@ -30,6 +30,7 @@ from models import (
     Section,
     Session,
     User,
+    check_fits,
     db,
     find_or_add_person,
     offering_member,
@@ -467,6 +468,7 @@ def create_state_client(app: flask.Flask):
     def update_section_description(section_id: str, description: str):
         section_id = int(section_id)
         section = Section.query.filter_by(id=section_id, course=get_course()).one()
+        check_fits("Your introduction", description, Section.description)
         section.description = description
         db.session.commit()
         return refresh_state()
@@ -476,6 +478,7 @@ def create_state_client(app: flask.Flask):
     def update_section_call_link(section_id: str, call_link: str):
         section_id = int(section_id)
         section = Section.query.filter_by(id=section_id, course=get_course()).one()
+        check_fits("The call link", call_link, Section.call_link)
         section.call_link = call_link
         db.session.commit()
         return refresh_state()
@@ -485,6 +488,7 @@ def create_state_client(app: flask.Flask):
     def update_section_enrollment_code(section_id: str, enrollment_code: str):
         section_id = int(section_id)
         section = Section.query.filter_by(id=section_id, course=get_course()).one()
+        check_fits("The enrollment code", enrollment_code, Section.enrollment_code)
         section.enrollment_code = enrollment_code
         db.session.commit()
         return refresh_state()
@@ -494,6 +498,7 @@ def create_state_client(app: flask.Flask):
     def update_section_location(section_id: str, new_location: str):
         section_id = int(section_id)
         section = Section.query.filter_by(id=section_id, course=get_course()).one()
+        check_fits("Location", new_location, Section.location)
         section.location = new_location
         db.session.commit()
         return fetch_section(section_id=section_id)
@@ -513,6 +518,7 @@ def create_state_client(app: flask.Flask):
         section_id = int(section_id)
         section = Section.query.filter_by(id=section_id, course=get_course()).one()
         section.tags = tags.split(",")
+        check_fits("Tags", section.tag_string, Section.tag_string)
         db.session.commit()
         return fetch_section(section_id=section_id)
 
@@ -610,6 +616,7 @@ def create_state_client(app: flask.Flask):
     @admin_required
     def update_config(**kwargs):
         config = get_config()
+        check_fits("The welcome message", kwargs.get("message"), CourseConfig.message)
         for key, value in kwargs.items():
             setattr(config, key, value)
         db.session.commit()

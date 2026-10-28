@@ -515,3 +515,11 @@ class Offering(db.Model):
 
 class Failure(Exception):
     pass
+
+
+def check_fits(label: str, value: str | None, column):
+    """Fail, naming the field, if ``value`` is longer than ``column`` holds.
+    Postgres rejects such a value with a server error; SQLite would store it."""
+    limit = column.type.length
+    if value is not None and len(value) > limit:
+        raise Failure(f"{label} must be at most {limit} characters, but it's {len(value)}.")
