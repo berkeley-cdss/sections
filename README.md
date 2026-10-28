@@ -15,7 +15,17 @@ Requires Python 3.14 and Node 24 (`mise install` picks both up from `mise.toml`)
 3. Install the frontend dependencies with `yarn install`.
 4. Create or update the local database with `flask --app main db upgrade` from `server/`.
 5. Run both with `yarn dev`, or separately: the backend with `python3 main.py` from `server/` (port 8000) and the frontend with `yarn start` (the Vite dev server on port 3000, which forwards API calls, the login routes and `/offerings` to port 8000).
-6. Run the backend tests from the repository root with `python -m unittest discover -s server -p "test_*.py"`.
+6. Install the test dependencies with `pip install -r requirements-dev.txt`, then run the backend tests with `pytest` from the repository root (see [Tests](#tests)).
+
+## Tests
+
+Tests live in `tests/`, as in seating: `tests/unit/` holds tests that use Flask's test client against an in-memory SQLite database. `pytest.ini` puts `server/` on the import path, so tests import the app's modules the way the app does (`from models import db`), and `pytest` from the repository root runs them all. CI (`.github/workflows/test.yml`) runs them on Python 3.14, the version the Dockerfile uses, and adds a coverage report to the run's summary page.
+
+Tests build the app with the same `create_app` (`server/application.py`) that `main.py` uses, given a test config, so they test the app as it's deployed:
+- New tests can be plain functions using the pytest fixtures in `tests/conftest.py` (`app`, `client`), like seating's tests.
+- The existing tests are `unittest` classes built on `tests/unit/support.py`. `AppTestCase` gives an empty database and request helpers, and `CourseTestCase` adds two offerings, a staff member, a student and a lab in each.
+
+Put a test in the file for what it tests (`test_login.py`, `test_sheet_imports.py`, `test_section_settings.py`, ...), and add a file when nothing fits.
 
 ## Authentication
 

@@ -5,14 +5,10 @@ tests make sure they stay escaped."""
 import os
 import unittest
 
-from flask import Flask
-
-from login import create_login_client
+from application import TEMPLATES_DIR
 from models import Offering, User, db
-from offerings import create_offering_pages
-from state import create_state_client
+from tests.unit.support import AppTestCase
 
-TEMPLATES_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "templates")
 NAME = '<script>alert("x")</script> & co'
 ESCAPED_NAME = "&lt;script&gt;alert(&#34;x&#34;)&lt;/script&gt; &amp; co"
 
@@ -20,23 +16,9 @@ ESCAPED_NAME = "&lt;script&gt;alert(&#34;x&#34;)&lt;/script&gt; &amp; co"
 NOT_HTML_TEMPLATES = set()
 
 
-class AutoescapeTests(unittest.TestCase):
+class AutoescapeTests(AppTestCase):
     def setUp(self):
-        self.app = Flask(__name__)
-        self.app.config.update(
-            SECRET_KEY="test", TESTING=True,
-            SQLALCHEMY_DATABASE_URI="sqlite:///:memory:",
-            CANVAS_SERVER_URL="https://canvas.test/",
-            CANVAS_CLIENT_ID="id", CANVAS_CLIENT_SECRET="secret",
-        )
-        db.init_app(self.app)
-        create_state_client(self.app)
-        create_login_client(self.app)
-        create_offering_pages(self.app)
-        self.context = self.app.app_context()
-        self.context.push()
-        db.create_all()
-
+        super().setUp()
         course = {"name": NAME, "code": NAME, "start_at": "2026-08-19T07:00:00Z",
                   "is_staff": True, "is_admin": False, "is_student": False}
         db.session.add(Offering(canvas_id=101, key="101", name=NAME, code=NAME, start_at=course["start_at"]))
@@ -44,14 +26,7 @@ class AutoescapeTests(unittest.TestCase):
                     canvas_courses={"101": course, "202": course})
         db.session.add(user)
         db.session.commit()
-        self.client = self.app.test_client()
-        with self.client.session_transaction() as browser:
-            browser["_user_id"] = user.get_id()
-
-    def tearDown(self):
-        db.session.remove()
-        db.drop_all()
-        self.context.pop()
+        self.sign_in(user)
 
     def test_autoescape_follows_flasks_rule(self):
         # Flask escapes templates whose name ends in .html, .htm, .xml, .xhtml or .svg.

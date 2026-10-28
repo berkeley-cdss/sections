@@ -24,7 +24,8 @@ __pycache__/
 *.sql
 
 # Tests and dev-only files
-server/test_*.py
+tests/
+pytest.ini
 server/test_csvs/
 scripts/
 README.md
