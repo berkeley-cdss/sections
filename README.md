@@ -62,6 +62,16 @@ flask --app main db upgrade                             # applies it to your loc
 
 Commit the migration with the model change. Deployments with `RUN_MIGRATIONS=true` (staging and production) run `flask db upgrade` when they start; PR previews never do, because they share the staging database.
 
+### Migrations and PR previews
+
+Sections checks that the database's migration matches the code's latest migration (`server/schema_check.py`). While they differ, every page, API call and `/health` returns 503 with a message saying why, rather than failing on the first query that uses a missing column. The check is repeated at most once a minute.
+
+This means **a PR that adds a migration can't be tried on its preview.** The preview shares the staging database, which only gets the migration when the PR is merged and staging deploys, so the preview shows "This is a preview of PR #N, which adds a database migration… Merge the PR to see its changes on staging." Test such a PR locally (`flask --app main db upgrade` against your own database), then merge it and check staging.
+
+The reverse also happens: after another PR with a migration is merged, staging's database is ahead of a preview whose branch doesn't have that migration. The preview then says to merge main into the PR's branch, which redeploys the preview with the migration.
+
+Locally, the same check tells you to run `flask --app main db upgrade` when your database is behind, for example after pulling a new migration.
+
 ## Import Sections from GCP
 1. Download the sections database to obtain a `.sql` file. Relevant Links [1](https://cloud.google.com/sql/docs/mysql/import-export/import-export-sql) and [2](https://cloud.google.com/storage/docs/downloading-objects).
 2. Likely the export uses MySQL syntax, so update it to SQLite.

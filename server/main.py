@@ -10,6 +10,7 @@ from errors import register_error_handlers
 from offerings import create_offering_pages
 from login import create_login_client
 from models import db
+from schema_check import check_schema_before_requests
 from security_headers import add_security_headers
 from state import create_state_client
 
@@ -30,12 +31,14 @@ app.wsgi_app = ProxyFix(app.wsgi_app, x_proto=1, x_host=1)
 load_config(app)
 db.init_app(app)
 # Schema changes are Alembic migrations in server/migrations; `flask db upgrade` applies them.
-Migrate(app, db, directory=os.path.join(os.path.dirname(os.path.abspath(__file__)), "migrations"))
+MIGRATIONS_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "migrations")
+Migrate(app, db, directory=MIGRATIONS_DIR)
 create_state_client(app)
 create_login_client(app)
 create_offering_pages(app)
 add_security_headers(app)
 register_error_handlers(app)
+check_schema_before_requests(app, MIGRATIONS_DIR)
 
 
 @app.route("/health")
