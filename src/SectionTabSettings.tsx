@@ -26,6 +26,17 @@ type SettingsKey = "staff" | "capacity" | "location" | "day" | "startTime" | "en
 // staff holds the chosen staff member's id, or "" for unassigned.
 type FormData = { [key in SettingsKey]: string };
 
+// The form's fields as the section has them.
+const savedValues = (section: Section): FormData => ({
+  staff: section.staff?.id.toString() ?? "",
+  capacity: section.capacity.toString(),
+  location: section.location,
+  day: getSectionDay(section),
+  startTime: getSectionStartTime(section),
+  endTime: getSectionEndTime(section),
+  tags: section.tags.toString(),
+});
+
 const settings: Array<{ key: SettingsKey; label: string; tooltip: string }> = [
   {
     key: "staff",
@@ -62,15 +73,12 @@ export default function SectionTabSettings({ section }: Props) {
   const [saving, setSaving] = useState(false);
   // Shown beside the button, since the page's messages are out of view up top.
   const [status, setStatus] = useState<Message | null>(null);
-  const [formData, setFormData] = useState<FormData>({
-    staff: section.staff?.id.toString() ?? "",
-    capacity: section.capacity.toString(),
-    location: section.location,
-    day: getSectionDay(section),
-    startTime: getSectionStartTime(section),
-    endTime: getSectionEndTime(section),
-    tags: section.tags.toString(),
-  });
+  const [formData, setFormData] = useState<FormData>(() => savedValues(section));
+  // After submitting, show what was saved, so a rejected value isn't sent again.
+  const fetchSectionAPI = useSectionAPI(
+    "fetch_section",
+    useCallback((saved: Section) => setFormData(savedValues(saved)), [])
+  );
 
   // The current staff member, even if they're no longer on the course's staff.
   const staffOptions =
@@ -135,12 +143,13 @@ export default function SectionTabSettings({ section }: Props) {
     for (const change of changes) {
       await change();
     }
+    await fetchSectionAPI({ section_id: section.id });
     setSaving(false);
     if (saved.current === changes.length) {
       setStatus({ text: "Section settings saved.", variant: "success" });
     } else {
       setStatus({
-        text: `Saved ${saved.current} of ${changes.length} changes. See the error at the top of the page.`,
+        text: `Saved ${saved.current} of ${changes.length} changes. See the error at the top of the page. The fields now show the saved values.`,
         variant: "danger",
       });
     }
