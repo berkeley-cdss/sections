@@ -19,7 +19,7 @@ from sqlalchemy import func
 from sqlalchemy.orm import joinedload, noload
 
 import canvas_service
-from offering import OFFERING_URL_PREFIX, get_course, get_course_name, load_offering
+from offering import OFFERING_URL_PREFIX, get_canvas_course_id, get_course, get_course_name, load_offering
 from import_sheet import check_capacity, import_sections_from_url, import_enrollment_from_url, parse_capacity
 
 from models import (
@@ -95,6 +95,20 @@ def get_config() -> CourseConfig:
 def is_valid_api_secret(secret) -> bool:
     expected = current_app.config.get("API_SECRET")
     return bool(expected) and isinstance(secret, str) and hmac.compare_digest(secret, expected)
+
+
+def can_teach_here(user: User) -> bool:
+    """Whether ``user`` can be assigned a section in this offering.
+
+    Their role in an offering is only brought up to date with Canvas when they
+    open its pages, so for anyone who has signed in, go by their Canvas roles
+    from their last sign-in instead. People imported from a spreadsheet who
+    haven't signed in only have their role here. Global admins count only
+    where they're on staff in Canvas, not in every offering."""
+    if user.canvas_id is not None:
+        roles = user.canvas_roles_in(get_canvas_course_id())
+        return roles is not None and roles[0]
+    return get_course() in user.staff_offerings
 
 
 def add_student_helper(student: User, target_section: Section):
@@ -517,13 +531,18 @@ def create_state_client(app: flask.Flask):
     @api
     @admin_required
     def list_staff():
-        """Everyone on staff in this offering, for choosing a section's staff
-        member. People join the staff when they sign in with a staff role in
-        bCourses or are listed in an imported Sections sheet."""
-        staff = User.query.filter(set_contains(User.staff_offerings, get_course())).all()
+        """Everyone who can be assigned a section here (see can_teach_here)."""
+        canvas_key = f'"{get_canvas_course_id()}"'
+        candidates = User.query.filter(
+            set_contains(User.staff_offerings, get_course())
+            # Narrows the search to people with this course in their Canvas
+            # courses; can_teach_here checks their role there.
+            | db.cast(User.canvas_courses, db.Text).contains(canvas_key, autoescape=True)
+        ).all()
         return [
             {"id": str(user.id), "name": user.name, "email": user.email}
-            for user in sorted(staff, key=lambda user: user.name.lower())
+            for user in sorted(candidates, key=lambda user: user.name.lower())
+            if can_teach_here(user)
         ]
 
     @api
@@ -534,9 +553,12 @@ def create_state_client(app: flask.Flask):
         section_id = int(section_id)
         section = Section.query.filter_by(id=section_id, course=get_course()).one()
         if staff_id:
-            staff = offering_member(id=int(staff_id))
-            if staff is None or not staff.is_staff:
+            staff = db.session.get(User, int(staff_id))
+            if staff is None or not can_teach_here(staff):
                 raise Failure("That person isn't on staff in this course.")
+            if get_course() not in staff.staff_offerings:
+                # On staff in Canvas, but hasn't opened this course here since.
+                staff.set_role(get_course(), is_staff=True, is_admin=staff.canvas_roles_in(get_canvas_course_id())[1])
             section.staff = staff
         else:
             section.staff = None

@@ -31,7 +31,7 @@ const settings: Array<{ key: SettingsKey; label: string; tooltip: string }> = [
     key: "staff",
     label: "Staff Member",
     tooltip:
-      "Anyone on staff in this course. Staff appear here once they sign in, or once a Sections sheet that lists them is imported.",
+      "TAs and teachers in this course on bCourses who have signed in to Sections, plus anyone listed in an imported Sections sheet who hasn't signed in yet.",
   },
   { key: "capacity", label: "Capacity", tooltip: "At least the number of students enrolled (Ex: 35)" },
   { key: "location", label: "Location", tooltip: "Any text (Ex: Wheeler 150)" },
