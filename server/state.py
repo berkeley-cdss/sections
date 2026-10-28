@@ -10,7 +10,7 @@ from functools import wraps
 from json import dumps
 from typing import List, Optional, Union
 from zoneinfo import ZoneInfo
-from import_sheet import parse_time_string
+from import_sheet import parse_section_times
 
 import flask
 from flask import Blueprint, abort, g, jsonify, render_template, request, current_app, session
@@ -503,8 +503,7 @@ def create_state_client(app: flask.Flask):
     def update_section_time(section_id: str, day: str, start_time: str, end_time: str):
         section_id = int(section_id)
         section = Section.query.filter_by(id=section_id, course=get_course()).one()
-        section.start_time = parse_time_string(day, start_time)
-        section.end_time = parse_time_string(day, end_time)
+        section.start_time, section.end_time = parse_section_times(day, start_time, end_time)
         db.session.commit()
         return fetch_section(section_id=section_id)
 

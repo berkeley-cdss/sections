@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from datetime import datetime
 from typing import List, Iterator
 
@@ -14,10 +15,25 @@ from models import Failure, Section, db, find_or_add_person, offering_member, us
 pst = ZoneInfo("US/Pacific")
 
 
-def parse_time_string(day, time):
-    hour, min, ampm = int(time[0:2]), int(time[3:5]), time[5]
+DAYS = ["M", "T", "W", "Th", "F"]
+TIME_FORMAT = re.compile(r"(\d\d):(\d\d)([ap])")
 
-    day_offset = ["M", "T", "W", "Th", "F"].index(day)
+
+def parse_time_string(day, time, label="Time"):
+    """Seconds since the epoch of ``time`` (e.g. "08:30a") on ``day`` (e.g. "Th")
+    in a fixed week. ``label`` names the time in error messages."""
+    if day not in DAYS:
+        raise Failure(f"Day must be one of {', '.join(DAYS)}, not '{day}'.")
+    match = TIME_FORMAT.fullmatch(time)
+    if match is None:
+        raise Failure(
+            f"{label} must be hh:mm followed by a or p, with a leading 0 (like 08:30a or 02:15p), not '{time}'."
+        )
+    hour, min, ampm = int(match[1]), int(match[2]), match[3]
+    if not (1 <= hour <= 12 and min <= 59):
+        raise Failure(f"{label} '{time}' isn't a time on a 12-hour clock.")
+
+    day_offset = DAYS.index(day)
     hour_offset = 12 if hour != 12 and ampm == "p" else 0
 
     # Section times are Integer columns; Postgres rejects a float like 1629817200.0.
@@ -29,6 +45,15 @@ def parse_time_string(day, time):
         minute=min,
         tzinfo=pst
     ).timestamp())
+
+
+def parse_section_times(day, start, end):
+    """``(start, end)`` times of a section, which must end after it starts."""
+    start_time = parse_time_string(day, start, "Start time")
+    end_time = parse_time_string(day, end, "End time")
+    if end_time <= start_time:
+        raise Failure(f"End time {end} must be after start time {start}.")
+    return start_time, end_time
 
 
 def header_field(col_name: str):
@@ -121,20 +146,19 @@ def import_sections(data: Iterator):
     for section in Section.query.filter_by(course=get_course()):
         key = section_key(section.name, section.start_time, section.end_time, section.location)
         existing.setdefault(key, []).append(section)
-    row_keys = [
-        section_key(
-            row[header.type_index],
-            parse_time_string(row[header.day_index], row[header.start_index]),
-            parse_time_string(row[header.day_index], row[header.end_index]),
-            row[header.location_index],
-        )
-        for row in rows
-    ]
+    row_keys = []
+    # Row numbers as in the spreadsheet, after the header in row 1.
+    for row_number, row in enumerate(rows, start=2):
+        try:
+            start_time, end_time = parse_section_times(
+                row[header.day_index], row[header.start_index], row[header.end_index])
+        except Failure as failure:
+            raise Failure(f"Row {row_number}: {failure}")
+        row_keys.append(section_key(row[header.type_index], start_time, end_time, row[header.location_index]))
     rows_per_key = {key: row_keys.count(key) for key in row_keys}
     matched = set()
     added = updated = 0
 
-    # Row numbers as in the spreadsheet, after the header in row 1.
     for row_number, (row, key) in enumerate(zip(rows, row_keys), start=2):
         email = row[header.email_index]
         name = row[header.name_index]
@@ -204,12 +228,15 @@ def import_enrollment(data: Iterator):
     model = EnrollmentHeader()
     header = process_header(model, next(data))
 
-    for row in data:
+    for row_number, row in enumerate(data, start=2):
         student_email = row[header.student_email_index]
         student_name = row[header.student_name_index]
         staff_email = row[header.staff_email_index]
         location = row[header.location_index]
-        start_time = parse_time_string(row[header.day_index], row[header.start_index])
+        try:
+            start_time = parse_time_string(row[header.day_index], row[header.start_index], "Start time")
+        except Failure as failure:
+            raise Failure(f"Row {row_number}: {failure}")
         section_type = row[header.type_index]
 
         student = offering_member(email=student_email)

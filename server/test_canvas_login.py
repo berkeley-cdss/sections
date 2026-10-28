@@ -598,6 +598,37 @@ class CanvasLoginTests(unittest.TestCase):
                                 staff_id=str(User.query.filter_by(email=email).one().id)).get_json()
             self.assertFalse(response["success"])
 
+    def test_section_times_must_be_valid_and_end_after_they_start(self):
+        self.make_staff_admin()
+        cases = [
+            (("m", "10:00a", "11:00a"), "Day must be one of M, T, W, Th, F, not 'm'."),
+            (("M", "10am", "11:00a"), "Start time must be hh:mm followed by a or p"),
+            (("M", "8:30a", "09:30a"), "Start time must be hh:mm followed by a or p"),
+            (("M", "10:00a", "11:00"), "End time must be hh:mm followed by a or p"),
+            (("M", "10:00x", "11:00x"), "Start time must be hh:mm followed by a or p"),
+            (("M", "13:00p", "02:00p"), "Start time '13:00p' isn't a time on a 12-hour clock."),
+            (("M", "11:00a", "10:00a"), "End time 10:00a must be after start time 11:00a."),
+            (("M", "10:00a", "10:00a"), "End time 10:00a must be after start time 10:00a."),
+        ]
+        for (day, start, end), message in cases:
+            with self.subTest(day=day, start=start, end=end):
+                response = self.api("update_section_time", section_id=str(self.section_id),
+                                    day=day, start_time=start, end_time=end).get_json()
+                self.assertFalse(response["success"])
+                self.assertIn(message, response["message"])
+        response = self.api("update_section_time", section_id=str(self.section_id),
+                            day="Th", start_time="11:30a", end_time="12:30p").get_json()
+        self.assertTrue(response["success"])
+        self.assertEqual((response["data"]["startTime"], response["data"]["endTime"]),
+                         (parse_time_string("Th", "11:30a"), parse_time_string("Th", "11:30a") + 3600))
+
+    def test_sheet_time_errors_name_the_row(self):
+        with self.assertRaisesRegex(Exception, "^Row 3: End time 09:00a must be after start time 10:00a."):
+            self.import_cs61a_sections(
+                ["staff@test", "Staff", "30", "Room A", "M", "10:00a", "11:00a", "", "TRUE", "Lab"],
+                ["staff@test", "Staff", "30", "Room B", "M", "10:00a", "09:00a", "", "TRUE", "Lab"])
+        self.assertEqual(Section.query.filter_by(location="Room A").count(), 0)
+
     def test_staff_who_are_not_admins_cannot_edit_staff_or_capacity(self):
         self.assertFalse(self.api("list_staff").get_json()["success"])
         for method, args in (("update_section_staff", {"staff_id": ""}),
