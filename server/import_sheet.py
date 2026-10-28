@@ -82,14 +82,62 @@ def process_header(model, header: List):
     return model
 
 
+def parse_capacity(capacity: str) -> int:
+    try:
+        capacity = int(capacity)
+    except ValueError:
+        raise Failure(f"Capacity must be a whole number, not '{capacity}'")
+    if capacity < 0:
+        raise Failure(f"Capacity can't be negative: {capacity}")
+    return capacity
+
+
+def check_capacity(section: Section, capacity: int):
+    """Fail if ``section`` already has more students than ``capacity``."""
+    if capacity < len(section.students):
+        raise Failure(
+            f"Can't set the capacity of the {section.name} section at {section.location} to {capacity}, "
+            f"because {len(section.students)} students are already enrolled in it."
+        )
+
+
+def section_key(section_type, start_time, end_time, location):
+    """What identifies a section when sections are re-imported: its type, time and place."""
+    return section_type, start_time, end_time, location
+
+
 def import_sections(data: Iterator):
+    """Add the sheet's sections to the offering. A row that matches an existing
+    section (same type, time and place, plus the same staff email when that
+    alone is ambiguous) updates that section instead of adding a copy of it.
+    Sections missing from the sheet are left alone.
+
+    Returns ``(added, updated)``, the number of sections of each."""
     model = SectionsHeader()
     header = process_header(model, next(data))
+    rows = list(data)
 
-    for row in data:
+    existing = {}
+    for section in Section.query.filter_by(course=get_course()):
+        key = section_key(section.name, section.start_time, section.end_time, section.location)
+        existing.setdefault(key, []).append(section)
+    row_keys = [
+        section_key(
+            row[header.type_index],
+            parse_time_string(row[header.day_index], row[header.start_index]),
+            parse_time_string(row[header.day_index], row[header.end_index]),
+            row[header.location_index],
+        )
+        for row in rows
+    ]
+    rows_per_key = {key: row_keys.count(key) for key in row_keys}
+    matched = set()
+    added = updated = 0
+
+    for row, key in zip(rows, row_keys):
         email = row[header.email_index]
         name = row[header.name_index]
-        capacity = row[header.capacity_index]
+        capacity = parse_capacity(row[header.capacity_index])
         tags = row[header.tags_index]
         can_self_enroll = row[header.self_enroll_index].lower()
         if can_self_enroll not in ("false", "true"):
@@ -101,28 +149,36 @@ def import_sections(data: Iterator):
             staff = find_or_add_person(email, name)
             staff.set_role(get_course(), is_staff=True)
 
-        section_type = row[header.type_index]
-        location = row[header.location_index]
-        start_time = parse_time_string(
-                    row[header.day_index], row[header.start_index])
-        end_time=parse_time_string(row[header.day_index], row[header.end_index])
+        candidates = [s for s in existing.get(key, []) if s.id not in matched]
+        if len(existing.get(key, [])) > 1 or rows_per_key[key] > 1:
+            # Several sections meet at this time and place (e.g. online), so
+            # only the one with this staff member is the same section.
+            candidates = [s for s in candidates if s.staff is not None and s.staff.id == staff.id]
+        section = candidates[0] if len(candidates) == 1 else None
 
-        section = Section(
-            capacity=capacity,
-            can_self_enroll=can_self_enroll,
-            staff=staff,
-            course=get_course(),
-            name = section_type, # In models.py, name refers to the type of section (Lab/Discussion/Custom)
-            start_time = start_time,
-            end_time = end_time,
-            location = location
-        )
+        if section is None:
+            section_type, start_time, end_time, location = key
+            section = Section(
+                course=get_course(),
+                name=section_type,  # In models.py, name refers to the type of section (Lab/Discussion/Custom)
+                start_time=start_time,
+                end_time=end_time,
+                location=location,
+            )
+            db.session.add(section)
+            added += 1
+        else:
+            check_capacity(section, capacity)
+            matched.add(section.id)
+            updated += 1
 
+        section.capacity = capacity
+        section.can_self_enroll = can_self_enroll
+        section.staff = staff
         section.tags = tags.split(",")
 
-        db.session.add(section)
-
     db.session.commit()
+    return added, updated
 
 
 def import_sections_from_url(url: str):
@@ -137,7 +193,7 @@ def import_sections_from_url(url: str):
             "and ensure the sheet is visible to anyone with the link."
         )
 
-    import_sections(iter(reader))
+    return import_sections(iter(reader))
 
 
 def import_enrollment(data: Iterator):

@@ -16,8 +16,10 @@ export default function ImportSectionsModal({ show, onClose }: Props) {
 
   const { pushMessage } = useContext(MessageContext);
   const state = useContext(StateContext);
-  const importSectionsFromSheet = useAPI("import_sections_from_sheet", () =>
-    pushMessage("Import successful!", "success")
+  const importSectionsFromSheet = useAPI(
+    "import_sections_from_sheet",
+    ({ custom }) =>
+      pushMessage(`Import successful! ${custom?.message ?? ""}`, "success"),
   );
 
   return (
@@ -45,6 +47,13 @@ export default function ImportSectionsModal({ show, onClose }: Props) {
             </>
           ) : null}
           .
+        </p>
+        <p>
+          You can import again after editing the spreadsheet. A row with the
+          same type, day, time and location as an existing section updates that
+          section (its staff, capacity, tags and self-enrollment) rather than
+          adding a copy, and its students stay enrolled. Sections missing from
+          the spreadsheet are kept; delete them from their section page.
         </p>
         <FormControl
           value={sheet ?? ""}

@@ -20,7 +20,7 @@ from sqlalchemy.orm import joinedload, noload
 
 import canvas_service
 from offering import OFFERING_URL_PREFIX, get_course, get_course_name, load_offering
-from import_sheet import import_sections_from_url, import_enrollment_from_url
+from import_sheet import check_capacity, import_sections_from_url, import_enrollment_from_url, parse_capacity
 
 from models import (
     Attendance,
@@ -504,6 +504,34 @@ def create_state_client(app: flask.Flask):
         return fetch_section(section_id=section_id)
 
     @api
+    @admin_required
+    def update_section_capacity(section_id: str, capacity: str):
+        section_id = int(section_id)
+        section = Section.query.filter_by(id=section_id, course=get_course()).one()
+        capacity = parse_capacity(str(capacity))
+        check_capacity(section, capacity)
+        section.capacity = capacity
+        db.session.commit()
+        return fetch_section(section_id=section_id)
+
+    @api
+    @admin_required
+    def update_section_staff(section_id: str, email: str):
+        """Assign the section to the staff member with this email, or leave it
+        unassigned if the email is blank."""
+        section_id = int(section_id)
+        section = Section.query.filter_by(id=section_id, course=get_course()).one()
+        if email.strip():
+            staff = offering_member(email=email)
+            if staff is None or not staff.is_staff:
+                raise Failure(f"{email} isn't on staff in this course.")
+            section.staff = staff
+        else:
+            section.staff = None
+        db.session.commit()
+        return fetch_section(section_id=section_id)
+
+    @api
     @staff_required
     def start_session(section_id: str, start_time: int):
         section_id = int(section_id)
@@ -778,8 +806,11 @@ def create_state_client(app: flask.Flask):
     @api
     @admin_required
     def import_sections_from_sheet(url: str):
-        import_sections_from_url(url)
-        return refresh_state()
+        added, updated = import_sections_from_url(url)
+        return {
+            **refresh_state(),
+            "custom": {"message": f"Added {added} sections and updated {updated} existing ones."},
+        }
 
     @api
     @admin_required

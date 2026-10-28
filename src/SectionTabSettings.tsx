@@ -15,11 +15,22 @@ type Props = {
   section: Section;
 };
 
-type SettingsKey = "location" | "day" | "startTime" | "endTime" | "tags";
+type SettingsKey = "staff" | "capacity" | "location" | "day" | "startTime" | "endTime" | "tags";
 
 type FormData = { [key in SettingsKey]: string };
 
 const settings: Array<{ key: SettingsKey; label: string; tooltip: string }> = [
+  {
+    key: "staff",
+    label: "Staff Email",
+    tooltip:
+      "Email of a staff member in this course, or blank for unassigned (Ex: oski@berkeley.edu)",
+  },
+  {
+    key: "capacity",
+    label: "Capacity",
+    tooltip: "At least the number of students enrolled (Ex: 35)",
+  },
   { key: "location", label: "Location", tooltip: "Any text (Ex: Wheeler 150)" },
   { key: "day", label: "Day", tooltip: "Any of: [M, T, W, Th, F] (Ex: M)" },
   { key: "startTime", label: "Start Time", tooltip: "hh:mma/p Include leading 0 (Ex: 08:30a)" },
@@ -31,8 +42,12 @@ export default function SectionTabSettings({ section }: Props) {
   const changeLocationAPI = useSectionAPI("update_section_location");
   const changeTagsAPI = useSectionAPI("update_section_tags");
   const changeTimeAPI = useSectionAPI("update_section_time");
+  const changeStaffAPI = useSectionAPI("update_section_staff");
+  const changeCapacityAPI = useSectionAPI("update_section_capacity");
 
   const [formData, setFormData] = useState<FormData>({
+    staff: section.staff?.email ?? "",
+    capacity: section.capacity.toString(),
     location: section.location,
     day: getSectionDay(section),
     startTime: getSectionStartTime(section),
@@ -41,6 +56,20 @@ export default function SectionTabSettings({ section }: Props) {
   });
 
   const handleSubmit = () => {
+    if (formData.staff !== (section.staff?.email ?? "")) {
+      changeStaffAPI({
+        section_id: section.id,
+        email: formData.staff,
+      });
+    }
+
+    if (formData.capacity !== section.capacity.toString()) {
+      changeCapacityAPI({
+        section_id: section.id,
+        capacity: formData.capacity,
+      });
+    }
+
     if (formData.location !== section.location) {
       changeLocationAPI({
         section_id: section.id,
