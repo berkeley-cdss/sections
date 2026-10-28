@@ -521,7 +521,7 @@ class CanvasLoginTests(unittest.TestCase):
         section = db.session.get(Section, self.section_id)
         section.students.append(db.session.get(User, self.known_id))
         db.session.commit()
-        with self.assertRaisesRegex(Exception, "1 students are already enrolled"):
+        with self.assertRaisesRegex(Exception, "^Row 2: .*1 students are already enrolled"):
             # setUp's lab is in Room from 0 to 3600, which isn't a weekday time,
             # so match it directly.
             with patch("import_sheet.parse_time_string", side_effect=[0, 3600]):

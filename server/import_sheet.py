@@ -96,8 +96,8 @@ def check_capacity(section: Section, capacity: int):
     """Fail if ``section`` already has more students than ``capacity``."""
     if capacity < len(section.students):
         raise Failure(
-            f"Can't set the capacity of the {section.name} section at {section.location} to {capacity}, "
-            f"because {len(section.students)} students are already enrolled in it."
+            f"Can't set the capacity to {capacity}, "
+            f"because {len(section.students)} students are already enrolled in this section."
         )
 
 
@@ -134,7 +134,8 @@ def import_sections(data: Iterator):
     matched = set()
     added = updated = 0
 
-    for row, key in zip(rows, row_keys):
+    # Row numbers as in the spreadsheet, after the header in row 1.
+    for row_number, (row, key) in enumerate(zip(rows, row_keys), start=2):
         email = row[header.email_index]
         name = row[header.name_index]
         capacity = parse_capacity(row[header.capacity_index])
@@ -168,7 +169,10 @@ def import_sections(data: Iterator):
             db.session.add(section)
             added += 1
         else:
-            check_capacity(section, capacity)
+            try:
+                check_capacity(section, capacity)
+            except Failure as failure:
+                raise Failure(f"Row {row_number}: {failure}")
             matched.add(section.id)
             updated += 1
 
