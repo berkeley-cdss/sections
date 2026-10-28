@@ -9,7 +9,7 @@ from zoneinfo import ZoneInfo
 from offering import get_course
 from google_sheets import read_spreadsheet
 from dataclasses import asdict, dataclass, field, fields
-from models import Failure, Section, db, find_or_add_person, offering_member, user_section
+from models import Failure, Section, check_fits, db, find_or_add_person, offering_member, user_section
 
 # Sample Spreadsheet Link: https://docs.google.com/spreadsheets/d/1WL7gXiBxPe6aUFBKfEOVS6iY27ITy9mARupLoJX-ouE/edit?usp=sharing
 pst = ZoneInfo("US/Pacific")
@@ -160,6 +160,12 @@ def import_sections(data: Iterator):
     added = updated = 0
 
     for row_number, (row, key) in enumerate(zip(rows, row_keys), start=2):
+        try:
+            check_fits("Type", row[header.type_index], Section.name)
+            check_fits("Location", row[header.location_index], Section.location)
+            check_fits("Tags", row[header.tags_index], Section.tag_string)
+        except Failure as failure:
+            raise Failure(f"Row {row_number}: {failure}")
         email = row[header.email_index]
         name = row[header.name_index]
         capacity = parse_capacity(row[header.capacity_index])

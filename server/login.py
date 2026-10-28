@@ -6,8 +6,10 @@ from authlib.integrations.flask_client import OAuth
 from flask import abort, current_app, redirect, request, session, url_for
 from flask_login import LoginManager, login_user, logout_user
 from markupsafe import escape
+from werkzeug.exceptions import HTTPException
 
 import canvas_service
+from errors import error_page, report_unexpected
 from offering import current_offering, in_offering
 from models import User, db, with_email
 
@@ -135,7 +137,14 @@ def create_login_client(app: flask.Flask):
             # The error is copied from the `error`/`error_description` query parameters, which anyone
             # can put in a link, and a returned str is served as HTML: escape it.
             return f"Access denied: {escape(e.description or e.error or 'unknown error')}", 403
-        complete_login(token)
+        try:
+            complete_login(token)
+        except HTTPException:
+            raise  # already says what's wrong, e.g. an email that belongs to another account
+        except Exception as error:
+            db.session.rollback()
+            message = report_unexpected(error, "saving your account")
+            return error_page("Couldn't sign you in", f"bCourses signed you in, but Sections couldn't. {message}", 500)
         return redirect(session.pop(AFTER_LOGIN_KEY, None) or url_for("offerings"))
 
     @app.route("/logout/")
