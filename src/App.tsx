@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import * as React from "react";
 import Button from "react-bootstrap/Button";
 import Container from "react-bootstrap/Container";
@@ -87,18 +87,24 @@ function CourseApp({ messages, setMessages }: CourseAppProps): React.ReactNode {
 
   const refreshState = useAPI("refresh_state", updateState);
 
+  // Load the course once. refreshState changes on every render (updateState
+  // does), and a failed load re-renders to show its error, so loading whenever
+  // state is null would retry forever.
+  const loadRequested = useRef(false);
   useEffect(() => {
-    if (state == null) {
+    if (!loadRequested.current) {
+      loadRequested.current = true;
       refreshState();
     }
-  }, [state, refreshState]);
+  }, [refreshState]);
 
   if (state == null && messages.length > 0) {
     // The first load failed; its error is in messages.
     return (
       <Container className="my-5">
         <h2 className="h4">Couldn&apos;t load Sections</h2>
-        <Messages messages={messages} onChange={setMessages} />
+        {/* Not dismissible: dismissing the error would bring back the spinner. */}
+        <Messages messages={messages} />
         <Button onClick={() => window.location.reload()}>Reload</Button>
       </Container>
     );
