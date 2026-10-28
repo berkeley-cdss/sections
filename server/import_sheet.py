@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from datetime import datetime
 from typing import List, Iterator
 
@@ -14,10 +15,25 @@ from models import Failure, Section, db, find_or_add_person, offering_member, us
 pst = ZoneInfo("US/Pacific")
 
 
-def parse_time_string(day, time):
-    hour, min, ampm = int(time[0:2]), int(time[3:5]), time[5]
+DAYS = ["M", "T", "W", "Th", "F"]
+TIME_FORMAT = re.compile(r"(\d\d):(\d\d)([ap])")
 
-    day_offset = ["M", "T", "W", "Th", "F"].index(day)
+
+def parse_time_string(day, time, label="Time"):
+    """Seconds since the epoch of ``time`` (e.g. "08:30a") on ``day`` (e.g. "Th")
+    in a fixed week. ``label`` names the time in error messages."""
+    if day not in DAYS:
+        raise Failure(f"Day must be one of {', '.join(DAYS)}, not '{day}'.")
+    match = TIME_FORMAT.fullmatch(time)
+    if match is None:
+        raise Failure(
+            f"{label} must be hh:mm followed by a or p, with a leading 0 (like 08:30a or 02:15p), not '{time}'."
+        )
+    hour, min, ampm = int(match[1]), int(match[2]), match[3]
+    if not (1 <= hour <= 12 and min <= 59):
+        raise Failure(f"{label} '{time}' isn't a time on a 12-hour clock.")
+
+    day_offset = DAYS.index(day)
     hour_offset = 12 if hour != 12 and ampm == "p" else 0
 
     # Section times are Integer columns; Postgres rejects a float like 1629817200.0.
@@ -29,6 +45,15 @@ def parse_time_string(day, time):
         minute=min,
         tzinfo=pst
     ).timestamp())
+
+
+def parse_section_times(day, start, end):
+    """``(start, end)`` times of a section, which must end after it starts."""
+    start_time = parse_time_string(day, start, "Start time")
+    end_time = parse_time_string(day, end, "End time")
+    if end_time <= start_time:
+        raise Failure(f"End time {end} must be after start time {start}.")
+    return start_time, end_time
 
 
 def header_field(col_name: str):
@@ -82,14 +107,62 @@ def process_header(model, header: List):
     return model
 
 
+def parse_capacity(capacity: str) -> int:
+    try:
+        capacity = int(capacity)
+    except ValueError:
+        raise Failure(f"Capacity must be a whole number, not '{capacity}'")
+    if capacity < 0:
+        raise Failure(f"Capacity can't be negative: {capacity}")
+    return capacity
+
+
+def check_capacity(section: Section, capacity: int):
+    """Fail if ``section`` already has more students than ``capacity``."""
+    if capacity < len(section.students):
+        raise Failure(
+            f"Can't set the capacity to {capacity}, "
+            f"because {len(section.students)} students are already enrolled in this section."
+        )
+
+
+def section_key(section_type, start_time, end_time, location):
+    """What identifies a section when sections are re-imported: its type, time and place."""
+    return section_type, start_time, end_time, location
+
+
 def import_sections(data: Iterator):
+    """Add the sheet's sections to the offering. A row that matches an existing
+    section (same type, time and place, plus the same staff email when that
+    alone is ambiguous) updates that section instead of adding a copy of it.
+    Sections missing from the sheet are left alone.
+
+    Returns ``(added, updated)``, the number of sections of each."""
     model = SectionsHeader()
     header = process_header(model, next(data))
+    rows = list(data)
 
-    for row in data:
+    existing = {}
+    for section in Section.query.filter_by(course=get_course()):
+        key = section_key(section.name, section.start_time, section.end_time, section.location)
+        existing.setdefault(key, []).append(section)
+    row_keys = []
+    # Row numbers as in the spreadsheet, after the header in row 1.
+    for row_number, row in enumerate(rows, start=2):
+        try:
+            start_time, end_time = parse_section_times(
+                row[header.day_index], row[header.start_index], row[header.end_index])
+        except Failure as failure:
+            raise Failure(f"Row {row_number}: {failure}")
+        row_keys.append(section_key(row[header.type_index], start_time, end_time, row[header.location_index]))
+    rows_per_key = {key: row_keys.count(key) for key in row_keys}
+    matched = set()
+    added = updated = 0
+
+    for row_number, (row, key) in enumerate(zip(rows, row_keys), start=2):
         email = row[header.email_index]
         name = row[header.name_index]
-        capacity = row[header.capacity_index]
+        capacity = parse_capacity(row[header.capacity_index])
         tags = row[header.tags_index]
         can_self_enroll = row[header.self_enroll_index].lower()
         if can_self_enroll not in ("false", "true"):
@@ -101,28 +174,39 @@ def import_sections(data: Iterator):
             staff = find_or_add_person(email, name)
             staff.set_role(get_course(), is_staff=True)
 
-        section_type = row[header.type_index]
-        location = row[header.location_index]
-        start_time = parse_time_string(
-                    row[header.day_index], row[header.start_index])
-        end_time=parse_time_string(row[header.day_index], row[header.end_index])
+        candidates = [s for s in existing.get(key, []) if s.id not in matched]
+        if len(existing.get(key, [])) > 1 or rows_per_key[key] > 1:
+            # Several sections meet at this time and place (e.g. online), so
+            # only the one with this staff member is the same section.
+            candidates = [s for s in candidates if s.staff is not None and s.staff.id == staff.id]
+        section = candidates[0] if len(candidates) == 1 else None
 
-        section = Section(
-            capacity=capacity,
-            can_self_enroll=can_self_enroll,
-            staff=staff,
-            course=get_course(),
-            name = section_type, # In models.py, name refers to the type of section (Lab/Discussion/Custom)
-            start_time = start_time,
-            end_time = end_time,
-            location = location
-        )
+        if section is None:
+            section_type, start_time, end_time, location = key
+            section = Section(
+                course=get_course(),
+                name=section_type,  # In models.py, name refers to the type of section (Lab/Discussion/Custom)
+                start_time=start_time,
+                end_time=end_time,
+                location=location,
+            )
+            db.session.add(section)
+            added += 1
+        else:
+            try:
+                check_capacity(section, capacity)
+            except Failure as failure:
+                raise Failure(f"Row {row_number}: {failure}")
+            matched.add(section.id)
+            updated += 1
 
+        section.capacity = capacity
+        section.can_self_enroll = can_self_enroll
+        section.staff = staff
         section.tags = tags.split(",")
 
-        db.session.add(section)
-
     db.session.commit()
+    return added, updated
 
 
 def import_sections_from_url(url: str):
@@ -137,19 +221,22 @@ def import_sections_from_url(url: str):
             "and ensure the sheet is visible to anyone with the link."
         )
 
-    import_sections(iter(reader))
+    return import_sections(iter(reader))
 
 
 def import_enrollment(data: Iterator):
     model = EnrollmentHeader()
     header = process_header(model, next(data))
 
-    for row in data:
+    for row_number, row in enumerate(data, start=2):
         student_email = row[header.student_email_index]
         student_name = row[header.student_name_index]
         staff_email = row[header.staff_email_index]
         location = row[header.location_index]
-        start_time = parse_time_string(row[header.day_index], row[header.start_index])
+        try:
+            start_time = parse_time_string(row[header.day_index], row[header.start_index], "Start time")
+        except Failure as failure:
+            raise Failure(f"Row {row_number}: {failure}")
         section_type = row[header.type_index]
 
         student = offering_member(email=student_email)

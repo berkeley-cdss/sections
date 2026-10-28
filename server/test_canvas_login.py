@@ -463,6 +463,179 @@ class CanvasLoginTests(unittest.TestCase):
             self.assertIs(type(section.start_time), int)
             self.assertIs(type(section.end_time), int)
 
+    SECTIONS_HEADER = ["Email", "Name", "Capacity", "Location", "Day", "Start", "End", "Tags",
+                       "Can Self Enroll", "Type"]
+
+    def import_cs61a_sections(self, *rows):
+        with self.app.test_request_context():
+            g.offering = Offering.query.filter_by(canvas_id=CS61A).one()
+            result = import_sections(iter([self.SECTIONS_HEADER, *rows]))
+        db.session.remove()
+        return result
+
+    def make_staff_admin(self):
+        staff = db.session.get(User, self.staff_id)
+        staff.canvas_courses = {str(CS61A): canvas_course("CS 61A", staff=True, admin=True)}
+        staff.set_role("cs61a", is_staff=True, is_admin=True)
+        db.session.commit()
+
+    def test_reimporting_sections_updates_them_instead_of_duplicating(self):
+        rows = [
+            ["staff@test", "Staff", "30", "Room A", "M", "10:00a", "11:00a", "", "TRUE", "Lab"],
+            ["staff@test", "Staff", "30", "Room B", "M", "10:00a", "11:00a", "", "TRUE", "Lab"],
+        ]
+        self.assertEqual(self.import_cs61a_sections(*rows), (2, 0))
+        room_a = Section.query.filter_by(course="cs61a", location="Room A").one()
+        room_a.students.append(db.session.get(User, self.known_id))
+        db.session.commit()
+        room_a_id = room_a.id
+
+        # A new TA, a bigger room, and a new section.
+        rows[0] = ["new@test", "New TA", "40", "Room A", "M", "10:00a", "11:00a", "Scholars", "FALSE", "Lab"]
+        rows.append(["staff@test", "Staff", "30", "Room C", "T", "10:00a", "11:00a", "", "TRUE", "Lab"])
+        self.assertEqual(self.import_cs61a_sections(*rows), (1, 2))
+        self.assertEqual(Section.query.filter_by(course="cs61a", location="Room A").count(), 1)
+        room_a = db.session.get(Section, room_a_id)
+        self.assertEqual((room_a.staff.email, room_a.capacity, room_a.tags, room_a.can_self_enroll),
+                         ("new@test", 40, ["Scholars"], False))
+        self.assertEqual([s.id for s in room_a.students], [self.known_id])
+        # The section from setUp, at another time, is left alone.
+        self.assertIsNotNone(db.session.get(Section, self.section_id))
+
+    def test_reimport_tells_sections_at_the_same_time_and_place_apart_by_staff(self):
+        other = User(email="other@test", name="Other")
+        other.set_role("cs61a", is_staff=True)
+        db.session.add(other)
+        db.session.commit()
+        rows = [
+            ["staff@test", "Staff", "30", "Online", "M", "10:00a", "11:00a", "", "TRUE", "Discussion"],
+            ["other@test", "Other", "30", "Online", "M", "10:00a", "11:00a", "", "TRUE", "Discussion"],
+        ]
+        self.assertEqual(self.import_cs61a_sections(*rows), (2, 0))
+        rows[1][2] = "50"
+        self.assertEqual(self.import_cs61a_sections(*rows), (0, 2))
+        capacities = {s.staff.email: s.capacity for s in Section.query.filter_by(location="Online")}
+        self.assertEqual(capacities, {"staff@test": 30, "other@test": 50})
+
+    def test_reimport_cannot_shrink_a_section_below_its_enrollment(self):
+        section = db.session.get(Section, self.section_id)
+        section.students.append(db.session.get(User, self.known_id))
+        db.session.commit()
+        with self.assertRaisesRegex(Exception, "^Row 2: .*1 students are already enrolled"):
+            # setUp's lab is in Room from 0 to 3600, which isn't a weekday time,
+            # so match it directly.
+            with patch("import_sheet.parse_time_string", side_effect=[0, 3600]):
+                self.import_cs61a_sections(
+                    ["staff@test", "Staff", "0", "Room", "M", "10:00a", "11:00a", "", "TRUE", "Lab"])
+        db.session.remove()
+        self.assertEqual(db.session.get(Section, self.section_id).capacity, 30)
+
+    def test_admins_edit_capacity_but_not_below_enrollment(self):
+        self.make_staff_admin()
+        section = db.session.get(Section, self.section_id)
+        section.students.append(db.session.get(User, self.known_id))
+        db.session.commit()
+        response = self.api("update_section_capacity", section_id=str(self.section_id), capacity="0").get_json()
+        self.assertFalse(response["success"])
+        self.assertIn("1 students are already enrolled", response["message"])
+        response = self.api("update_section_capacity", section_id=str(self.section_id), capacity="1").get_json()
+        self.assertTrue(response["success"])
+        self.assertEqual(response["data"]["capacity"], 1)
+
+    def test_admins_reassign_a_section_to_another_staff_member(self):
+        self.make_staff_admin()
+        other = User(email="other@test", name="Other")
+        other.set_role("cs61a", is_staff=True)
+        db.session.add(other)
+        db.session.commit()
+        staff_list = self.api("list_staff").get_json()["data"]
+        self.assertEqual([person["email"] for person in staff_list], ["other@test", "staff@test"])
+        section_id = str(self.section_id)
+        response = self.api("update_section_staff", section_id=section_id, staff_id=str(other.id)).get_json()
+        self.assertEqual(response["data"]["staff"]["email"], "other@test")
+        response = self.api("update_section_staff", section_id=section_id, staff_id=str(self.known_id)).get_json()
+        self.assertFalse(response["success"])  # a student, not staff
+        response = self.api("update_section_staff", section_id=section_id, staff_id="").get_json()
+        self.assertIsNone(response["data"]["staff"])
+
+    def test_staff_list_follows_canvas_for_people_who_have_signed_in(self):
+        self.make_staff_admin()
+        people = {
+            # On staff in Canvas, but hasn't opened this course in Sections yet.
+            "new-ta@test": User(email="new-ta@test", name="New TA", canvas_id="10", canvas_courses={
+                str(CS61A): canvas_course("CS 61A", staff=True)}),
+            # Removed from the Canvas course after opening it here as staff.
+            "gone-ta@test": User(email="gone-ta@test", name="Gone TA", canvas_id="11", canvas_courses={
+                str(DATA8): canvas_course("DATA 8", staff=True)}),
+            # Imported from a spreadsheet; hasn't signed in.
+            "imported@test": User(email="imported@test", name="Imported"),
+            # Global admins, who are staff everywhere, but only listed where
+            # they're on staff in Canvas.
+            "admin@test": User(email="admin@test", name="Admin", canvas_id="12", is_global_admin=True),
+            "admin-ta@test": User(email="admin-ta@test", name="Admin TA", canvas_id="14", is_global_admin=True,
+                                  canvas_courses={str(CS61A): canvas_course("CS 61A", staff=True)}),
+            # On staff in another course only.
+            "data8-ta@test": User(email="data8-ta@test", name="DATA 8 TA", canvas_id="13", canvas_courses={
+                str(DATA8): canvas_course("DATA 8", staff=True)}),
+        }
+        people["gone-ta@test"].set_role("cs61a", is_staff=True)
+        people["imported@test"].set_role("cs61a", is_staff=True)
+        db.session.add_all(people.values())
+        db.session.commit()
+
+        staff_list = self.api("list_staff").get_json()["data"]
+        self.assertEqual([person["email"] for person in staff_list],
+                         ["admin-ta@test", "imported@test", "new-ta@test", "staff@test"])
+
+        new_ta_id = people["new-ta@test"].id
+        response = self.api("update_section_staff", section_id=str(self.section_id),
+                            staff_id=str(new_ta_id)).get_json()
+        self.assertEqual(response["data"]["staff"]["email"], "new-ta@test")
+        db.session.remove()
+        self.assertIn("cs61a", db.session.get(User, new_ta_id).staff_offerings)
+        for email in ("gone-ta@test", "data8-ta@test", "admin@test"):
+            response = self.api("update_section_staff", section_id=str(self.section_id),
+                                staff_id=str(User.query.filter_by(email=email).one().id)).get_json()
+            self.assertFalse(response["success"])
+
+    def test_section_times_must_be_valid_and_end_after_they_start(self):
+        self.make_staff_admin()
+        cases = [
+            (("m", "10:00a", "11:00a"), "Day must be one of M, T, W, Th, F, not 'm'."),
+            (("M", "10am", "11:00a"), "Start time must be hh:mm followed by a or p"),
+            (("M", "8:30a", "09:30a"), "Start time must be hh:mm followed by a or p"),
+            (("M", "10:00a", "11:00"), "End time must be hh:mm followed by a or p"),
+            (("M", "10:00x", "11:00x"), "Start time must be hh:mm followed by a or p"),
+            (("M", "13:00p", "02:00p"), "Start time '13:00p' isn't a time on a 12-hour clock."),
+            (("M", "11:00a", "10:00a"), "End time 10:00a must be after start time 11:00a."),
+            (("M", "10:00a", "10:00a"), "End time 10:00a must be after start time 10:00a."),
+        ]
+        for (day, start, end), message in cases:
+            with self.subTest(day=day, start=start, end=end):
+                response = self.api("update_section_time", section_id=str(self.section_id),
+                                    day=day, start_time=start, end_time=end).get_json()
+                self.assertFalse(response["success"])
+                self.assertIn(message, response["message"])
+        response = self.api("update_section_time", section_id=str(self.section_id),
+                            day="Th", start_time="11:30a", end_time="12:30p").get_json()
+        self.assertTrue(response["success"])
+        self.assertEqual((response["data"]["startTime"], response["data"]["endTime"]),
+                         (parse_time_string("Th", "11:30a"), parse_time_string("Th", "11:30a") + 3600))
+
+    def test_sheet_time_errors_name_the_row(self):
+        with self.assertRaisesRegex(Exception, "^Row 3: End time 09:00a must be after start time 10:00a."):
+            self.import_cs61a_sections(
+                ["staff@test", "Staff", "30", "Room A", "M", "10:00a", "11:00a", "", "TRUE", "Lab"],
+                ["staff@test", "Staff", "30", "Room B", "M", "10:00a", "09:00a", "", "TRUE", "Lab"])
+        self.assertEqual(Section.query.filter_by(location="Room A").count(), 0)
+
+    def test_staff_who_are_not_admins_cannot_edit_staff_or_capacity(self):
+        self.assertFalse(self.api("list_staff").get_json()["success"])
+        for method, args in (("update_section_staff", {"staff_id": ""}),
+                             ("update_section_capacity", {"capacity": "50"})):
+            response = self.api(method, section_id=str(self.section_id), **args).get_json()
+            self.assertFalse(response["success"])
+
     def test_email_lookups_ignore_case(self):
         with patch("state.canvas_service.get_student_from_email") as lookup:
             self.assertTrue(self.add_students("KNOWN@Test")["success"])

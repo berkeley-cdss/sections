@@ -10,7 +10,7 @@ from functools import wraps
 from json import dumps
 from typing import List, Optional, Union
 from zoneinfo import ZoneInfo
-from import_sheet import parse_time_string
+from import_sheet import parse_section_times
 
 import flask
 from flask import Blueprint, abort, g, jsonify, render_template, request, current_app, session
@@ -19,8 +19,8 @@ from sqlalchemy import func
 from sqlalchemy.orm import joinedload, noload
 
 import canvas_service
-from offering import OFFERING_URL_PREFIX, get_course, get_course_name, load_offering
-from import_sheet import import_sections_from_url, import_enrollment_from_url
+from offering import OFFERING_URL_PREFIX, get_canvas_course_id, get_course, get_course_name, load_offering
+from import_sheet import check_capacity, import_sections_from_url, import_enrollment_from_url, parse_capacity
 
 from models import (
     Attendance,
@@ -95,6 +95,20 @@ def get_config() -> CourseConfig:
 def is_valid_api_secret(secret) -> bool:
     expected = current_app.config.get("API_SECRET")
     return bool(expected) and isinstance(secret, str) and hmac.compare_digest(secret, expected)
+
+
+def can_teach_here(user: User) -> bool:
+    """Whether ``user`` can be assigned a section in this offering.
+
+    Their role in an offering is only brought up to date with Canvas when they
+    open its pages, so for anyone who has signed in, go by their Canvas roles
+    from their last sign-in instead. People imported from a spreadsheet who
+    haven't signed in only have their role here. Global admins count only
+    where they're on staff in Canvas, not in every offering."""
+    if user.canvas_id is not None:
+        roles = user.canvas_roles_in(get_canvas_course_id())
+        return roles is not None and roles[0]
+    return get_course() in user.staff_offerings
 
 
 def add_student_helper(student: User, target_section: Section):
@@ -489,8 +503,7 @@ def create_state_client(app: flask.Flask):
     def update_section_time(section_id: str, day: str, start_time: str, end_time: str):
         section_id = int(section_id)
         section = Section.query.filter_by(id=section_id, course=get_course()).one()
-        section.start_time = parse_time_string(day, start_time)
-        section.end_time = parse_time_string(day, end_time)
+        section.start_time, section.end_time = parse_section_times(day, start_time, end_time)
         db.session.commit()
         return fetch_section(section_id=section_id)
 
@@ -500,6 +513,54 @@ def create_state_client(app: flask.Flask):
         section_id = int(section_id)
         section = Section.query.filter_by(id=section_id, course=get_course()).one()
         section.tags = tags.split(",")
+        db.session.commit()
+        return fetch_section(section_id=section_id)
+
+    @api
+    @admin_required
+    def update_section_capacity(section_id: str, capacity: str):
+        section_id = int(section_id)
+        section = Section.query.filter_by(id=section_id, course=get_course()).one()
+        capacity = parse_capacity(str(capacity))
+        check_capacity(section, capacity)
+        section.capacity = capacity
+        db.session.commit()
+        return fetch_section(section_id=section_id)
+
+    @api
+    @admin_required
+    def list_staff():
+        """Everyone who can be assigned a section here (see can_teach_here)."""
+        canvas_key = f'"{get_canvas_course_id()}"'
+        candidates = User.query.filter(
+            set_contains(User.staff_offerings, get_course())
+            # Narrows the search to people with this course in their Canvas
+            # courses; can_teach_here checks their role there.
+            | db.cast(User.canvas_courses, db.Text).contains(canvas_key, autoescape=True)
+        ).all()
+        return [
+            {"id": str(user.id), "name": user.name, "email": user.email}
+            for user in sorted(candidates, key=lambda user: user.name.lower())
+            if can_teach_here(user)
+        ]
+
+    @api
+    @admin_required
+    def update_section_staff(section_id: str, staff_id: str):
+        """Assign the section to the staff member with this id, or leave it
+        unassigned if the id is blank."""
+        section_id = int(section_id)
+        section = Section.query.filter_by(id=section_id, course=get_course()).one()
+        if staff_id:
+            staff = db.session.get(User, int(staff_id))
+            if staff is None or not can_teach_here(staff):
+                raise Failure("That person isn't on staff in this course.")
+            if get_course() not in staff.staff_offerings:
+                # On staff in Canvas, but hasn't opened this course here since.
+                staff.set_role(get_course(), is_staff=True, is_admin=staff.canvas_roles_in(get_canvas_course_id())[1])
+            section.staff = staff
+        else:
+            section.staff = None
         db.session.commit()
         return fetch_section(section_id=section_id)
 
@@ -778,8 +839,11 @@ def create_state_client(app: flask.Flask):
     @api
     @admin_required
     def import_sections_from_sheet(url: str):
-        import_sections_from_url(url)
-        return refresh_state()
+        added, updated = import_sections_from_url(url)
+        return {
+            **refresh_state(),
+            "custom": {"message": f"Added {added} sections and updated {updated} existing ones."},
+        }
 
     @api
     @admin_required
