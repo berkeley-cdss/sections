@@ -548,16 +548,19 @@ class CanvasLoginTests(unittest.TestCase):
         other.set_role("cs61a", is_staff=True)
         db.session.add(other)
         db.session.commit()
+        staff_list = self.api("list_staff").get_json()["data"]
+        self.assertEqual([person["email"] for person in staff_list], ["other@test", "staff@test"])
         section_id = str(self.section_id)
-        response = self.api("update_section_staff", section_id=section_id, email="OTHER@test").get_json()
+        response = self.api("update_section_staff", section_id=section_id, staff_id=str(other.id)).get_json()
         self.assertEqual(response["data"]["staff"]["email"], "other@test")
-        response = self.api("update_section_staff", section_id=section_id, email="known@test").get_json()
+        response = self.api("update_section_staff", section_id=section_id, staff_id=str(self.known_id)).get_json()
         self.assertFalse(response["success"])  # a student, not staff
-        response = self.api("update_section_staff", section_id=section_id, email="").get_json()
+        response = self.api("update_section_staff", section_id=section_id, staff_id="").get_json()
         self.assertIsNone(response["data"]["staff"])
 
     def test_staff_who_are_not_admins_cannot_edit_staff_or_capacity(self):
-        for method, args in (("update_section_staff", {"email": ""}),
+        self.assertFalse(self.api("list_staff").get_json()["success"])
+        for method, args in (("update_section_staff", {"staff_id": ""}),
                              ("update_section_capacity", {"capacity": "50"})):
             response = self.api(method, section_id=str(self.section_id), **args).get_json()
             self.assertFalse(response["success"])

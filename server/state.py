@@ -516,15 +516,27 @@ def create_state_client(app: flask.Flask):
 
     @api
     @admin_required
-    def update_section_staff(section_id: str, email: str):
-        """Assign the section to the staff member with this email, or leave it
-        unassigned if the email is blank."""
+    def list_staff():
+        """Everyone on staff in this offering, for choosing a section's staff
+        member. People join the staff when they sign in with a staff role in
+        bCourses or are listed in an imported Sections sheet."""
+        staff = User.query.filter(set_contains(User.staff_offerings, get_course())).all()
+        return [
+            {"id": str(user.id), "name": user.name, "email": user.email}
+            for user in sorted(staff, key=lambda user: user.name.lower())
+        ]
+
+    @api
+    @admin_required
+    def update_section_staff(section_id: str, staff_id: str):
+        """Assign the section to the staff member with this id, or leave it
+        unassigned if the id is blank."""
         section_id = int(section_id)
         section = Section.query.filter_by(id=section_id, course=get_course()).one()
-        if email.strip():
-            staff = offering_member(email=email)
+        if staff_id:
+            staff = offering_member(id=int(staff_id))
             if staff is None or not staff.is_staff:
-                raise Failure(f"{email} isn't on staff in this course.")
+                raise Failure("That person isn't on staff in this course.")
             section.staff = staff
         else:
             section.staff = None
