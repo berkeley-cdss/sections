@@ -25,7 +25,9 @@ Tests build the app with the same `create_app` (`server/application.py`) that `m
 - New tests can be plain functions using the pytest fixtures in `tests/conftest.py` (`app`, `client`), like seating's tests.
 - The existing tests are `unittest` classes built on `tests/unit/support.py`. `AppTestCase` gives an empty database and request helpers, and `CourseTestCase` adds two offerings, a staff member, a student and a lab in each.
 
-Put a test in the file for what it tests (`test_login.py`, `test_sheet_imports.py`, `test_section_settings.py`, ...), and add a file when nothing fits.
+Put a test in the file for what it tests (`test_login.py`, `test_sheet_imports.py`, `test_section_settings.py`, ...), and add a file when nothing fits. Test files go in `tests/unit/` and are named `test_<subject>.py`, with test functions and methods named `test_<what it checks>`. pytest only looks in `tests/`, so a test file anywhere else, such as `server/`, never runs, locally or in CI.
+
+CI fails if coverage of `server/` drops below 74%, its level when the minimum was set. Raise the minimum in `.github/workflows/test.yml` as coverage grows.
 
 ## Authentication
 
