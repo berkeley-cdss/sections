@@ -78,10 +78,9 @@ class SectionSettingsTests(CourseTestCase):
         self.make_staff_admin()
         cases = [
             (("m", "10:00a", "11:00a"), "Day must be one of M, T, W, Th, F, not 'm'."),
-            (("M", "10am", "11:00a"), "Start time must be hh:mm followed by a or p"),
-            (("M", "8:30a", "09:30a"), "Start time must be hh:mm followed by a or p"),
-            (("M", "10:00a", "11:00"), "End time must be hh:mm followed by a or p"),
-            (("M", "10:00x", "11:00x"), "Start time must be hh:mm followed by a or p"),
+            (("M", "10am", "11:00a"), "Start time must be a time with am or pm"),
+            (("M", "10:00a", "11:00"), "End time must be a time with am or pm"),
+            (("M", "10:00x", "11:00x"), "Start time must be a time with am or pm"),
             (("M", "13:00p", "02:00p"), "Start time '13:00p' isn't a time on a 12-hour clock."),
             (("M", "11:00a", "10:00a"), "End time 10:00a must be after start time 11:00a."),
             (("M", "10:00a", "10:00a"), "End time 10:00a must be after start time 10:00a."),

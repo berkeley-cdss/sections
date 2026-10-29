@@ -5,7 +5,7 @@ from unittest.mock import patch
 from flask import g
 
 from import_sheet import import_enrollment, import_sections, parse_time_string
-from models import Offering, Section, User, db
+from models import Failure, Offering, Section, User, db
 from tests.unit.support import CS61A, CourseTestCase
 
 
@@ -25,6 +25,21 @@ class SheetImportsTests(CourseTestCase):
         db.session.remove()
         sections = {s.id for s in db.session.get(User, self.known_id).sections}
         self.assertEqual(sections, {self.section_id, self.data8_section_id})
+
+    def test_times_can_be_written_as_google_sheets_shows_them(self):
+        eight_thirty = parse_time_string("M", "08:30a")
+        for time in ("8:30a", "8:30 AM", "8:30am", "08:30 am", "8:30 A", " 8:30 AM "):
+            with self.subTest(time=time):
+                self.assertEqual(parse_time_string("M", time), eight_thirty)
+        self.assertEqual(parse_time_string("M", "8:30:00 AM"), eight_thirty)
+        self.assertEqual(parse_time_string("M", "8:30:15 AM"), eight_thirty + 15)
+        self.assertEqual(parse_time_string("M", "2:15 PM"), parse_time_string("M", "02:15p"))
+        # 12 AM is midnight and 12 PM is noon.
+        self.assertEqual(parse_time_string("M", "12:30 PM") - parse_time_string("M", "12:30 AM"), 12 * 3600)
+        self.assertEqual(parse_time_string("M", "12:30 AM"), eight_thirty - 8 * 3600)
+        for time in ("10:00", "10am", "8:30 AMX", "8:30  AM", "13:00 PM", "0:30 AM", "8:30:60 AM"):
+            with self.subTest(time=time), self.assertRaises(Failure):
+                parse_time_string("M", time)
 
     def test_sheet_times_are_integers(self):
         # Section times are Integer columns. Postgres rejects a float such as

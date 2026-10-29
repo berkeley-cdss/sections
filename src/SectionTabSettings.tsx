@@ -47,8 +47,8 @@ const settings: Array<{ key: SettingsKey; label: string; tooltip: string }> = [
   { key: "capacity", label: "Capacity", tooltip: "At least the number of students enrolled (Ex: 35)" },
   { key: "location", label: "Location", tooltip: "Any text (Ex: Wheeler 150)" },
   { key: "day", label: "Day", tooltip: "Any of: [M, T, W, Th, F] (Ex: M)" },
-  { key: "startTime", label: "Start Time", tooltip: "hh:mma/p Include leading 0 (Ex: 08:30a)" },
-  { key: "endTime", label: "End Time", tooltip: "hh:mma/p Include leading 0 (Ex: 08:30a)" },
+  { key: "startTime", label: "Start Time", tooltip: "A time with am or pm (Ex: 8:30 AM, 2:15pm or 08:30a)" },
+  { key: "endTime", label: "End Time", tooltip: "A time with am or pm (Ex: 8:30 AM, 2:15pm or 08:30a)" },
   { key: "tags", label: "Tags", tooltip: "Comma seperated tags (Ex: Tag A, Tag B)" },
 ];
 

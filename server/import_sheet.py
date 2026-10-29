@@ -16,33 +16,35 @@ pst = ZoneInfo("US/Pacific")
 
 
 DAYS = ["M", "T", "W", "Th", "F"]
-TIME_FORMAT = re.compile(r"(\d\d):(\d\d)([ap])")
+# 08:30a, as the Settings tab shows times, or 8:30 AM, as Google Sheets shows
+# them (seconds optional, any case). am or pm is required: 10:00 is ambiguous.
+TIME_FORMAT = re.compile(r"(\d\d?):(\d\d)(?::(\d\d))?\s?([ap])m?", re.IGNORECASE)
 
 
 def parse_time_string(day, time, label="Time"):
-    """Seconds since the epoch of ``time`` (e.g. "08:30a") on ``day`` (e.g. "Th")
-    in a fixed week. ``label`` names the time in error messages."""
+    """Seconds since the epoch of ``time`` (e.g. "08:30a" or "8:30 AM") on
+    ``day`` (e.g. "Th") in a fixed week. ``label`` names the time in error messages."""
     if day not in DAYS:
         raise Failure(f"Day must be one of {', '.join(DAYS)}, not '{day}'.")
-    match = TIME_FORMAT.fullmatch(time)
+    match = TIME_FORMAT.fullmatch(time.strip())
     if match is None:
-        raise Failure(
-            f"{label} must be hh:mm followed by a or p, with a leading 0 (like 08:30a or 02:15p), not '{time}'."
-        )
-    hour, min, ampm = int(match[1]), int(match[2]), match[3]
-    if not (1 <= hour <= 12 and min <= 59):
+        raise Failure(f"{label} must be a time with am or pm, like 8:30 AM, 2:15pm or 08:30a, not '{time}'.")
+    hour, min, sec, ampm = int(match[1]), int(match[2]), int(match[3] or 0), match[4].lower()
+    if not (1 <= hour <= 12 and min <= 59 and sec <= 59):
         raise Failure(f"{label} '{time}' isn't a time on a 12-hour clock.")
 
     day_offset = DAYS.index(day)
-    hour_offset = 12 if hour != 12 and ampm == "p" else 0
+    # 12:30a is just after midnight and 12:30p just after noon.
+    hour_offset = 12 if ampm == "p" else 0
 
     # Section times are Integer columns; Postgres rejects a float like 1629817200.0.
     return int(datetime(
         year=2021,
         month=8,
         day=23 + day_offset,
-        hour=hour + hour_offset,
+        hour=hour % 12 + hour_offset,
         minute=min,
+        second=sec,
         tzinfo=pst
     ).timestamp())
 
