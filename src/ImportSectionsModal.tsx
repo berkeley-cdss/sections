@@ -49,6 +49,10 @@ export default function ImportSectionsModal({ show, onClose }: Props) {
           .
         </p>
         <p>
+          Days are M, T, W, Th or F. Times need am or pm, as Google Sheets
+          shows them (like 8:30 AM) or like 08:30a.
+        </p>
+        <p>
           You can import again after editing the spreadsheet. A row with the
           same type, day, time and location as an existing section updates that
           section (its staff, capacity, tags and self-enrollment) rather than
