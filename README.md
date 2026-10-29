@@ -27,7 +27,7 @@ Tests build the app with the same `create_app` (`server/application.py`) that `m
 
 Put a test in the file for what it tests (`test_login.py`, `test_sheet_imports.py`, `test_section_settings.py`, ...), and add a file when nothing fits. Test files go in `tests/unit/` and are named `test_<subject>.py`, with test functions and methods named `test_<what it checks>`. pytest only looks in `tests/`, so a test file anywhere else, such as `server/`, never runs, locally or in CI.
 
-CI fails if coverage of `server/` drops below 74%, its level when the minimum was set. Raise the minimum in `.github/workflows/test.yml` as coverage grows.
+CI uploads coverage of `server/` to [Codecov](https://app.codecov.io/gh/berkeley-cdss/sections), whose `codecov/project` check fails a PR that lowers coverage below main's (`codecov.yml`). Its PR comment also says how much of the PR's changed lines are tested. Separately, the tests job fails if coverage drops below 74%, its level when that minimum was set.
 
 ## Authentication
 

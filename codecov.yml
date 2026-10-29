@@ -1,0 +1,19 @@
+# Each PR's coverage is compared with main's, so the bar rises with coverage
+# instead of being a number to update. --cov-fail-under in test.yml is a
+# floor under it.
+coverage:
+  status:
+    project:
+      default:
+        # fail if the PR lowers total coverage below main's
+        target: auto
+        threshold: 0%
+    # report how much of the PR's changed lines are tested, without failing
+    patch:
+      default:
+        informational: true
+
+# a PR comment, as in seating: the change in total coverage, coverage of the
+# PR's changed lines, and the files whose coverage changed
+comment:
+  layout: "condensed_header, diff, condensed_files, condensed_footer"
