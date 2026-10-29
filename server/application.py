@@ -6,9 +6,11 @@ from jinja2 import ChoiceLoader, FileSystemLoader
 from werkzeug.middleware.proxy_fix import ProxyFix
 
 from config import load_config
+from errors import register_error_handlers
 from offerings import create_offering_pages
 from login import create_login_client
 from models import db
+from schema_check import check_schema_before_requests
 from security_headers import add_security_headers
 from state import create_state_client
 
@@ -42,6 +44,11 @@ def create_app(test_config: dict | None = None) -> Flask:
     create_login_client(app)
     create_offering_pages(app)
     add_security_headers(app)
+    register_error_handlers(app)
+    # Test apps build their tables with create_all rather than migrations, so
+    # their databases have no migration to check. test_schema_check tests it.
+    if test_config is None:
+        check_schema_before_requests(app, MIGRATIONS_DIR)
 
     @app.route("/health")
     def health():

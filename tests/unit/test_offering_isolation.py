@@ -1,7 +1,5 @@
 """Each course offering's sections, people and attendance stay separate."""
 
-from sqlalchemy.exc import NoResultFound
-
 from models import Attendance, AttendanceStatus, Section, Session, User, db, set_contains
 from tests.unit.support import CS61A, CourseTestCase, DATA8, UNSET_UP, canvas_course
 
@@ -11,8 +9,8 @@ class OfferingIsolationTests(CourseTestCase):
         state = self.api("refresh_state").get_json()["data"]
         self.assertEqual([s["location"] for s in state["sections"]], ["Room"])
         # Sections from another course can't be reached through this one.
-        with self.assertRaises(NoResultFound):  # a 500 outside tests
-            self.api("claim_section", section_id=str(self.data8_section_id))
+        # The error handler reports the missing section as a 404.
+        self.assertEqual(self.api("claim_section", section_id=str(self.data8_section_id)).status_code, 404)
         self.assertIsNone(db.session.get(Section, self.data8_section_id).staff_id)
         # Not enrolled in DATA 8, so its pages and APIs are forbidden.
         self.assertEqual(self.api("refresh_state", DATA8).status_code, 403)
@@ -112,8 +110,9 @@ class OfferingIsolationTests(CourseTestCase):
         self.assertEqual(User.query.filter(set_contains(User.student_offerings, "cs61a-tutoring")).count(), 1)
 
     def test_sessions_can_only_start_for_this_offerings_sections(self):
-        with self.assertRaises(NoResultFound):  # a 500 outside tests
-            self.api("start_session", section_id=str(self.data8_section_id), start_time=0)
+        # The error handler reports the missing section as a 404.
+        self.assertEqual(self.api("start_session", section_id=str(self.data8_section_id), start_time=0).status_code,
+                         404)
         self.assertEqual(Session.query.count(), 0)
 
     def test_course_that_is_not_set_up_is_not_found(self):
