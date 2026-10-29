@@ -76,7 +76,9 @@ class SchemaCheckTests(unittest.TestCase):
         self.assertIn("Database migration needed", page.get_data(as_text=True))
         self.assertEqual(health.status_code, 503)
         # The error page's own stylesheet still loads.
-        self.assertEqual(self.client.get("/assets/css/style.css").status_code, 200)
+        # Closing the response closes the stylesheet's file.
+        with self.client.get("/assets/css/style.css") as stylesheet:
+            self.assertEqual(stylesheet.status_code, 200)
 
     def test_preview_older_than_the_database_says_to_merge_main(self):
         upgrade()
