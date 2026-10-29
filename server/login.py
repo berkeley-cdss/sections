@@ -69,6 +69,20 @@ def complete_login(token: dict):
         session["canvas_token_expires_at"] = time.time() + token.get("expires_in", 3600)
 
 
+def finish_login(token: dict):
+    """Sign in with a Canvas OAuth token response, then go back to the page that
+    sent the user to log in."""
+    try:
+        complete_login(token)
+    except HTTPException:
+        raise  # already says what's wrong, e.g. an email that belongs to another account
+    except Exception as error:
+        db.session.rollback()
+        message = report_unexpected(error, "saving your account")
+        return error_page("Couldn't sign you in", f"bCourses signed you in, but Sections couldn't. {message}", 500)
+    return redirect(session.pop(AFTER_LOGIN_KEY, None) or url_for("offerings"))
+
+
 def sync_offering_role(user: User) -> bool:
     """Bring the user's role in the current offering in line with Canvas.
 
@@ -127,6 +141,8 @@ def create_login_client(app: flask.Flask):
     @app.route("/login/")
     def login():
         session[AFTER_LOGIN_KEY] = _safe_next(request.args.get("next"))
+        if canvas_service.is_mock_canvas():
+            return redirect(url_for("dev_login"))
         return canvas.authorize_redirect(url_for("authorized", _external=True))
 
     @app.route("/authorized/")
@@ -137,15 +153,7 @@ def create_login_client(app: flask.Flask):
             # The error is copied from the `error`/`error_description` query parameters, which anyone
             # can put in a link, and a returned str is served as HTML: escape it.
             return f"Access denied: {escape(e.description or e.error or 'unknown error')}", 403
-        try:
-            complete_login(token)
-        except HTTPException:
-            raise  # already says what's wrong, e.g. an email that belongs to another account
-        except Exception as error:
-            db.session.rollback()
-            message = report_unexpected(error, "saving your account")
-            return error_page("Couldn't sign you in", f"bCourses signed you in, but Sections couldn't. {message}", 500)
-        return redirect(session.pop(AFTER_LOGIN_KEY, None) or url_for("offerings"))
+        return finish_login(token)
 
     @app.route("/logout/")
     def logout():

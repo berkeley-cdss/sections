@@ -22,6 +22,7 @@ export default defineConfig({
       "/offerings/new": backend,
       "/login/": backend,
       "/authorized/": backend,
+      "/dev_login/": backend,
       "/logout/": backend,
       "/assets/": backend,
     },
