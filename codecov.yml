@@ -12,3 +12,8 @@ coverage:
     patch:
       default:
         informational: true
+
+# a PR comment, as in seating: the change in total coverage, coverage of the
+# PR's changed lines, and the files whose coverage changed
+comment:
+  layout: "condensed_header, diff, condensed_files, condensed_footer"
