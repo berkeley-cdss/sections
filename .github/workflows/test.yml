@@ -43,6 +43,8 @@ jobs:
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           files: coverage.xml
+          # upload only coverage.xml, not pytest-coverage.txt too
+          disable_search: true
 
   frontend-build:
     runs-on: ubuntu-latest
