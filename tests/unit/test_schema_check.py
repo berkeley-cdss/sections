@@ -11,12 +11,12 @@ from alembic.script import ScriptDirectory
 from flask import Flask
 from flask_migrate import Migrate, upgrade
 
+from application import MIGRATIONS_DIR as MIGRATIONS, TEMPLATES_DIR
 from errors import register_error_handlers
 from models import db
 from offerings import create_offering_pages
 from schema_check import check_schema_before_requests
 
-MIGRATIONS = os.path.join(os.path.dirname(os.path.abspath(__file__)), "migrations")
 HEAD = ScriptDirectory(MIGRATIONS).get_current_head()
 
 
@@ -24,7 +24,8 @@ class SchemaCheckTests(unittest.TestCase):
     def setUp(self):
         handle, self.path = tempfile.mkstemp(suffix=".db")
         os.close(handle)
-        self.app = Flask(__name__)
+        # The error page is in the server's templates, not beside this file.
+        self.app = Flask(__name__, template_folder=TEMPLATES_DIR)
         self.app.config.update(SECRET_KEY="test", TESTING=True,
                                SQLALCHEMY_DATABASE_URI=f"sqlite:///{self.path}")
         db.init_app(self.app)

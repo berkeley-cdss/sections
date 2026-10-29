@@ -6,40 +6,20 @@ import unittest
 from unittest.mock import patch
 
 from authlib.integrations.flask_client import FlaskOAuth2App
-from flask import Flask, g
 
-from errors import register_error_handlers
-from login import create_login_client
 from models import CourseConfig, Offering, Section, User, db
-from offerings import create_offering_pages
-from state import create_state_client
-
-CS61A = 101
+from tests.unit.support import CS61A, AppTestCase
 
 
-class ErrorTests(unittest.TestCase):
+class ErrorTests(AppTestCase):
     def setUp(self):
-        self.app = Flask(__name__)
-        self.app.config.update(
-            SECRET_KEY="test", TESTING=True,
-            SQLALCHEMY_DATABASE_URI="sqlite:///:memory:",
-            CANVAS_SERVER_URL="https://canvas.test/",
-            CANVAS_CLIENT_ID="id", CANVAS_CLIENT_SECRET="secret",
-        )
-        db.init_app(self.app)
-        create_state_client(self.app)
-        create_login_client(self.app)
-        create_offering_pages(self.app)
-        register_error_handlers(self.app)
+        super().setUp()
 
         @self.app.route("/offerings/<int:canvas_course_id>/api/explode", methods=["POST"])
         @self.app.route("/explode")
         def explode(**_):
             raise RuntimeError("column users.pronouns does not exist")
 
-        self.context = self.app.app_context()
-        self.context.push()
-        db.create_all()
         admin = User(email="admin@test", name="Admin", canvas_id="1", canvas_courses={str(CS61A): {
             "name": "CS 61A", "code": "CS 61A", "start_at": None,
             "is_staff": True, "is_admin": True, "is_student": False}})
@@ -50,21 +30,12 @@ class ErrorTests(unittest.TestCase):
                             CourseConfig(course="cs61a")])
         db.session.commit()
         self.admin, self.section_id = admin, section.id
-        self.client = self.app.test_client()
-
-    def tearDown(self):
-        db.session.remove()
-        db.drop_all()
-        self.context.pop()
 
     def sign_in(self):
-        with self.client.session_transaction() as browser:
-            browser["_user_id"] = self.admin.get_id()
+        super().sign_in(self.admin)
 
     def request(self, method, path, **kwargs):
-        # The test's app context is reused for requests; see test_canvas_login.
-        for key in ("offering", "_login_user"):
-            g.pop(key, None)
+        self.clear_request_globals()
         return getattr(self.client, method)(path, **kwargs)
 
     def api(self, method, canvas_course_id=CS61A, headers=None, **args):

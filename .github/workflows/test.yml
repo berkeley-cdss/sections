@@ -11,18 +11,30 @@ permissions:
 
 jobs:
   server-tests:
-    strategy:
-      matrix:
-        python-version: ["3.12", "3.13", "3.14"]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
       - name: Bootstrap
         uses: ./.github/actions/bootstrap
         with:
-          python-version: ${{ matrix.python-version }}
+          # The version the Dockerfile and mise.toml use, as in seating.
+          python-version: "3.14"
       - name: Run tests with pytest
-        run: pytest server
+        run: |
+          # make sure the pipe passes on pytest's exit code, so failures fail CI
+          set -o pipefail
+          # fail if coverage drops below its level when this minimum was set (74.3%)
+          pytest --cov=server --cov-report=term-missing:skip-covered --cov-fail-under=74 | tee pytest-coverage.txt
+      # the per-file coverage report, on the run's summary page
+      - name: Coverage summary
+        if: ${{ !cancelled() }}
+        run: |
+          {
+            echo "### Server test coverage"
+            echo '```'
+            cat pytest-coverage.txt
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
 
   frontend-build:
     runs-on: ubuntu-latest

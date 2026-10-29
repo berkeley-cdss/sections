@@ -8,9 +8,8 @@ from alembic.autogenerate import compare_metadata
 from alembic.migration import MigrationContext
 from flask_migrate import Migrate, upgrade
 
+from application import MIGRATIONS_DIR as MIGRATIONS
 from models import db
-
-MIGRATIONS = os.path.join(os.path.dirname(os.path.abspath(__file__)), "migrations")
 
 
 class SingleUserMigrationTests(unittest.TestCase):
