@@ -60,8 +60,13 @@ def load_config(app: flask.Flask):
     if env not in ("development", "staging", "production"):
         raise RuntimeError(f"FLASK_ENV must be development, staging or production, not {env!r}")
     is_dev = env == "development"
+    # As in seating, development uses the fake Canvas (fake_canvas.py) unless
+    # MOCK_CANVAS=false, so a fresh checkout can sign in through /dev_login/
+    # without Canvas credentials. Staging and production always use real Canvas.
+    mock_canvas = is_dev and os.getenv("MOCK_CANVAS", "true").lower() == "true"
+    canvas_setting = os.getenv if mock_canvas else _require
 
-    canvas_server_url = _require("CANVAS_SERVER_URL")
+    canvas_server_url = canvas_setting("CANVAS_SERVER_URL") or ""
     admin_override = os.getenv("ADMIN_OVERRIDE_CANVAS_COURSE_ID")
 
     app.config.update(
@@ -69,8 +74,9 @@ def load_config(app: flask.Flask):
         SECRET_KEY=os.getenv("SECRET_KEY") or ("development" if is_dev else _require("SECRET_KEY")),
         **_database_config(is_dev),
         CANVAS_SERVER_URL=canvas_server_url.rstrip("/") + "/",
-        CANVAS_CLIENT_ID=_require("CANVAS_CLIENT_ID"),
-        CANVAS_CLIENT_SECRET=_require("CANVAS_CLIENT_SECRET"),
+        CANVAS_CLIENT_ID=canvas_setting("CANVAS_CLIENT_ID"),
+        CANVAS_CLIENT_SECRET=canvas_setting("CANVAS_CLIENT_SECRET"),
+        MOCK_CANVAS=mock_canvas,
         # Members of this bCourses course are staff and admin in every course.
         ADMIN_OVERRIDE_CANVAS_COURSE_ID=int(admin_override) if admin_override else None,
         # Shown to staff as the account to share import spreadsheets with.

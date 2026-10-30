@@ -6,6 +6,7 @@ from jinja2 import ChoiceLoader, FileSystemLoader
 from werkzeug.middleware.proxy_fix import ProxyFix
 
 from config import load_config
+from dev_login import create_dev_login_page
 from errors import register_error_handlers
 from offerings import create_offering_pages
 from login import create_login_client
@@ -42,6 +43,7 @@ def create_app(test_config: dict | None = None) -> Flask:
     Migrate(app, db, directory=MIGRATIONS_DIR)
     create_state_client(app)
     create_login_client(app)
+    create_dev_login_page(app)
     create_offering_pages(app)
     add_security_headers(app)
     register_error_handlers(app)

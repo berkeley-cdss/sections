@@ -5,7 +5,7 @@
 
 Requires Python 3.14 and Node 24 (`mise install` picks both up from `mise.toml`). The frontend is React 19 and TypeScript, built with Vite.
 
-1. Copy `.env.example` to `.env` and fill in the Canvas sandbox `CANVAS_CLIENT_ID` and `CANVAS_CLIENT_SECRET` (ask a maintainer). Never commit `.env`.
+1. Copy `.env.example` to `.env`. Never commit `.env`. By default the app uses a fake Canvas, so no Canvas credentials are needed (see [Fake Canvas](#fake-canvas)); to use the Canvas sandbox instead, set `MOCK_CANVAS=false` and fill in its `CANVAS_CLIENT_ID` and `CANVAS_CLIENT_SECRET` (ask a maintainer).
 2. Create a virtual environment and install the server dependencies:
    ```
    python3 -m venv venv
@@ -35,7 +35,13 @@ One deployment serves every bCourses course, with the same routes as seating. Us
 
 Course staff set up Sections for a course with "Import courses from Canvas" (`/offerings/new`). Offerings moved from the monorepo store their data under an old key (`cs61a`, `data8`, ...); link each one to its Canvas course with `flask --app main link-offering <canvas id> <key> "<name>"`, run from `server/` against that database.
 
-To sign in locally, open `localhost:3000/offerings` and log in. This works on port 3000 if the sandbox developer key allows `http://localhost:3000/authorized/` as a redirect URI. Otherwise, log in at `localhost:8000/login/` instead, then go back to `localhost:3000`. A "template not found" error for course pages on port 8000 is expected, because the built frontend isn't served in development.
+To sign in locally against the sandbox (`MOCK_CANVAS=false`), open `localhost:3000/offerings` and log in. This works on port 3000 if the sandbox developer key allows `http://localhost:3000/authorized/` as a redirect URI. Otherwise, log in at `localhost:8000/login/` instead, then go back to `localhost:3000`. A "template not found" error for course pages on port 8000 is expected, because the built frontend isn't served in development.
+
+### Fake Canvas
+
+As in seating, development uses a fake Canvas unless `MOCK_CANVAS=false`, so a fresh checkout can be signed into without any Canvas credentials, and tests can sign in without reaching Canvas. Logging in goes to `/dev_login/`, which lists the seeded users and their roles in each course; pick one to sign in as them. Their profiles, courses and enrollments are in `server/fake_canvas_data/` (the same users and courses as seating's, plus a teacher, Oski Bear, so that admin pages can be tried), and `server/fake_canvas.py` answers the Canvas calls in `server/canvas_service.py` from them. Staff can import those courses with "Import courses from Canvas" and add their students by email as usual. Staging and production never use the fake Canvas, whatever `MOCK_CANVAS` says, and `/dev_login/` only redirects home there.
+
+To try the sample sections with it, sign in as Oski Bear, then run `python3 seed.py 1234567` or the imports below with `--course 1234567`.
 
 ### About the Sandbox
 
