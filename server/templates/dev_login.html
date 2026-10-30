@@ -39,7 +39,8 @@
             <td>
               {# A submit button carries its own name and value, so one form covers every user. #}
               <button class="btn btn-primary btn-sm text-nowrap"
-                      type="submit" name="user_id" value="{{ user.id }}">Log in</button>
+                      type="submit" name="user_id" value="{{ user.id }}"
+                      aria-label="Log in as {{ user.name }}">Log in</button>
             </td>
           </tr>
           {% endfor %}

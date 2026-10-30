@@ -116,6 +116,7 @@ class DevLoginTests(AppTestCase):
         page = self.get("/dev_login/").get_data(as_text=True)
         self.assertIn("Lavender Angela", page)
         self.assertEqual(page.count('name="user_id" value='), 5)
+        self.assertIn('aria-label="Log in as Lavender Angela"', page)
 
         response = self.dev_login(YU_LONG)
         self.assertEqual(response.status_code, 302)
