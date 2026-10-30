@@ -45,10 +45,10 @@ export default function HistoryPage({ userID }: Props): React.ReactNode {
       <br />
       <Row>
         <Col>
-          <h2>
+          <h1 className="h2">
             {user.name}
             <Pronouns of={user} />
-          </h2>
+          </h1>
 
           {userID == null && (
             <p>

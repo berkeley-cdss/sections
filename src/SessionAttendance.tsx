@@ -98,7 +98,7 @@ export default function SessionAttendance({ section, session }: Props) {
                 Start Session
               </Button>
             ) : (
-              <Button variant="outline-secondary" size="sm" onClick={() => setAdding(true)}>
+              <Button variant="secondary" size="sm" onClick={() => setAdding(true)}>
                 Add Students
               </Button>
             )}

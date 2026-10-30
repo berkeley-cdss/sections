@@ -196,6 +196,7 @@ export default function AdminPage(): React.ReactNode {
   return (
     <Container>
       <br />
+      <h1 className="h2">Admin</h1>
       <Row>
         <Col>
           <Tabs defaultActiveKey="general">
