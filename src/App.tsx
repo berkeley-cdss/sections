@@ -176,20 +176,22 @@ function CourseApp({ messages, setMessages }: CourseAppProps): React.ReactNode {
           </Navbar.Collapse>
         </Container>
       </Navbar>
-      <Messages messages={messages} onChange={setMessages} />
-      <StateContext.Provider value={{ ...state, updateState }}>
-        <Routes>
-          <Route path="/" element={<MainPage />} />
-          <Route path="/history" element={<HistoryPage />} />
-          <Route path="/user/:id" element={<UserHistoryRoute />} />
-          <Route path="/lab" element={<LabPage />} />
-          <Route path="/disc" element={<DiscPage />} />
-          <Route path="/tutoring" element={<TutoringPage />} />
-          <Route path="/admin" element={<AdminPage />} />
-          <Route path="/section/:id" element={<SectionRoute />} />
-          <Route path="*" element={<Container>Error: Page not found</Container>} />
-        </Routes>
-      </StateContext.Provider>
+      <main>
+        <Messages messages={messages} onChange={setMessages} />
+        <StateContext.Provider value={{ ...state, updateState }}>
+          <Routes>
+            <Route path="/" element={<MainPage />} />
+            <Route path="/history" element={<HistoryPage />} />
+            <Route path="/user/:id" element={<UserHistoryRoute />} />
+            <Route path="/lab" element={<LabPage />} />
+            <Route path="/disc" element={<DiscPage />} />
+            <Route path="/tutoring" element={<TutoringPage />} />
+            <Route path="/admin" element={<AdminPage />} />
+            <Route path="/section/:id" element={<SectionRoute />} />
+            <Route path="*" element={<Container>Error: Page not found</Container>} />
+          </Routes>
+        </StateContext.Provider>
+      </main>
     </Router>
   );
 }

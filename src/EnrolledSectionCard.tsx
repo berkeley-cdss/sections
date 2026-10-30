@@ -58,11 +58,12 @@ export default function EnrolledSectionCard({ section }: Props) {
   return (
     <Card>
       <Card.Header>
-        {/* Bootstrap 5 disables negative margin utilities (Bootstrap 4's mb-n1). */}
-        <h5 style={{ marginBottom: "-0.25rem" }}>
+        {/* Bootstrap 5 disables negative margin utilities (Bootstrap 4's mb-n1). The
+            card follows the page's h1, so it's an h2 that looks like an h5. */}
+        <h2 className="h5" style={{ marginBottom: "-0.25rem" }}>
           {sectionTitle(section)}
           <Tags tags={section.tags} />
-        </h5>
+        </h2>
       </Card.Header>
       <Card.Body>
         <div className="mb-3">
