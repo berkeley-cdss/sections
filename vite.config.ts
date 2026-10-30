@@ -16,7 +16,9 @@ export default defineConfig({
   server: {
     port: 3000,
     proxy: {
-      // Course APIs, plus the server-rendered pages and login flow.
+      // Course APIs, plus the server-rendered pages and login flow. "/" is the
+      // landing page, where logging out lands, not the course app.
+      "^/$": backend,
       "^/offerings/\\d+/api/": backend,
       "^/offerings/?$": backend,
       "/offerings/new": backend,
