@@ -1,4 +1,4 @@
-"""The server, browser and seed data the accessibility audit shares, as in
+"""The server, browser and seed data the a11y audit shares, as in
 seating's tests/a11y/conftest.py. Everyone signs in through /dev_login/ against
 the fake Canvas (server/fake_canvas.py)."""
 
@@ -29,7 +29,7 @@ LAB_ID, STUDENT_ID = 1, 2
 # rule id -> pages that break it, printed at the end of the run
 VIOLATIONS_BY_RULE = defaultdict(set)
 
-# Counts the page's API requests in flight, so an audit waits for the course
+# Counts the page's API requests in flight, so an a11y audit waits for the course
 # pages' data to load. It runs before the page's own scripts.
 COUNT_FETCHES = """
 window.pendingFetches = 0;
@@ -46,7 +46,7 @@ return document.readyState === 'complete' && window.pendingFetches === 0
 
 
 class Site:
-    """One browser on one server, shared by every page audit, signed in as whoever a page needs."""
+    """One browser on one server, shared by every page's a11y audit, signed in as whoever a page needs."""
 
     def __init__(self, driver, base_url):
         self.driver = driver

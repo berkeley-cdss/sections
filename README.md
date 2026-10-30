@@ -21,7 +21,7 @@ Requires Python 3.14 and Node 24 (`mise install` picks both up from `mise.toml`)
 
 ## Tests
 
-Tests live in `tests/`, as in seating: `tests/unit/` holds tests that use Flask's test client against an in-memory SQLite database, and `tests/a11y/` audits every page's accessibility in a browser ([docs/a11y.md](docs/a11y.md)). `pytest.ini` puts `server/` on the import path, so tests import the app's modules the way the app does (`from models import db`). `pytest` from the repository root runs the unit tests, and `pytest tests/a11y` runs the audit. CI (`.github/workflows/test.yml`) runs them on Python 3.14, the version the Dockerfile uses, and adds a coverage report to the run's summary page.
+Tests live in `tests/`, as in seating: `tests/unit/` holds tests that use Flask's test client against an in-memory SQLite database, and `tests/a11y/` audits every page's accessibility in a browser ([docs/a11y.md](docs/a11y.md)). `pytest.ini` puts `server/` on the import path, so tests import the app's modules the way the app does (`from models import db`). `pytest` from the repository root runs the unit tests, and `pytest tests/a11y` runs the a11y audit. CI (`.github/workflows/test.yml`) runs them on Python 3.14, the version the Dockerfile uses, and adds a coverage report to the run's summary page.
 
 Tests build the app with the same `create_app` (`server/application.py`) that `main.py` uses, given a test config, so they test the app as it's deployed:
 - New tests can be plain functions using the pytest fixtures in `tests/conftest.py` (`app`, `client`), like seating's tests.
