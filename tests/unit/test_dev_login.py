@@ -141,21 +141,13 @@ class DevLoginTests(AppTestCase):
         self.assertTrue(body["success"], body)
         self.assertEqual(User.query.filter_by(email="jx@berkeley.edu").one().canvas_id, JIMMY_XU)
 
-    def test_a_pasted_id_is_trimmed(self):
-        # Copying an ID out of a spreadsheet brings whitespace with it.
-        self.assertEqual(self.dev_login("  345678\n").status_code, 302)
-        self.assertIsNotNone(User.query.filter_by(canvas_id="345678").one_or_none())
-
-    def test_an_unknown_id_is_explained_rather_than_crashing(self):
-        response = self.dev_login("999999", follow_redirects=True)
-        self.assertEqual(response.status_code, 200)
-        self.assertIn("No seeded user has Canvas ID 999999", response.get_data(as_text=True))
+    def test_only_seeded_users_can_sign_in(self):
+        # The page only offers seeded users, but a hand-made post should not 500.
+        for user_id in ("999999", ""):
+            with self.subTest(user_id=user_id):
+                self.assertEqual(self.dev_login(user_id).status_code, 400)
+        self.assertEqual(self.post("/dev_login/").status_code, 400)
         self.assertEqual(User.query.count(), 0)
-
-    def test_a_missing_id_is_reported(self):
-        response = self.dev_login("")
-        self.assertEqual(response.status_code, 200)
-        self.assertIn("Enter a Canvas ID.", response.get_data(as_text=True))
 
     def test_page_is_hidden_when_canvas_is_real(self):
         self.app.config["MOCK_CANVAS"] = False

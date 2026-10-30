@@ -2,7 +2,7 @@
 while canvas_service.is_mock_canvas(), so never in staging or production."""
 
 import flask
-from flask import flash, redirect, render_template, request, url_for
+from flask import abort, redirect, render_template, request, url_for
 
 import canvas_service
 from fake_canvas_data import FAKE_COURSES, FAKE_ENROLLMENTS, FAKE_USERS
@@ -35,20 +35,15 @@ def create_dev_login_page(app: flask.Flask):
         if not canvas_service.is_mock_canvas():
             return redirect(url_for("index"))
         if request.method == "POST":
-            # A pasted Canvas ID usually arrives with whitespace around it.
-            user_id = request.form.get("user_id", "").strip()
-            if not user_id:
-                flash("Enter a Canvas ID.", "error")
-            # The fake Canvas only knows the seeded users, so anything else
-            # would fail later on with a stack trace instead of an explanation.
-            elif user_id not in FAKE_USERS:
-                flash(f"No seeded user has Canvas ID {user_id}. Pick one of the users below.", "error")
-            else:
-                # What Canvas's token endpoint returns, as seating's fake one does.
-                return finish_login({
-                    "access_token": "dev_access_token",
-                    "token_type": "Bearer",
-                    "user": FAKE_USERS[user_id],
-                    "expires_in": 3600,
-                })
+            user_id = request.form.get("user_id")
+            # The page only offers the seeded users; the fake Canvas knows no one else.
+            if user_id not in FAKE_USERS:
+                abort(400, f"No seeded user has Canvas ID {user_id}.")
+            # What Canvas's token endpoint returns, as seating's fake one does.
+            return finish_login({
+                "access_token": "dev_access_token",
+                "token_type": "Bearer",
+                "user": FAKE_USERS[user_id],
+                "expires_in": 3600,
+            })
         return render_template("dev_login.html", title="Dev Login", mock_users=mock_user_roster())
