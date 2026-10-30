@@ -1,4 +1,6 @@
-# Sections 
+# Sections
+
+[![A11y](https://github.com/berkeley-cdss/sections/actions/workflows/a11y.yml/badge.svg)](docs/a11y.md)
 
 
 ## Local Development Set Up
@@ -19,13 +21,13 @@ Requires Python 3.14 and Node 24 (`mise install` picks both up from `mise.toml`)
 
 ## Tests
 
-Tests live in `tests/`, as in seating: `tests/unit/` holds tests that use Flask's test client against an in-memory SQLite database. `pytest.ini` puts `server/` on the import path, so tests import the app's modules the way the app does (`from models import db`), and `pytest` from the repository root runs them all. CI (`.github/workflows/test.yml`) runs them on Python 3.14, the version the Dockerfile uses, and adds a coverage report to the run's summary page.
+Tests live in `tests/`, as in seating: `tests/unit/` holds tests that use Flask's test client against an in-memory SQLite database, and `tests/a11y/` audits every page's accessibility in a browser ([docs/a11y.md](docs/a11y.md)). `pytest.ini` puts `server/` on the import path, so tests import the app's modules the way the app does (`from models import db`). `pytest` from the repository root runs the unit tests, and `pytest tests/a11y` runs the audit. CI (`.github/workflows/test.yml`) runs them on Python 3.14, the version the Dockerfile uses, and adds a coverage report to the run's summary page.
 
 Tests build the app with the same `create_app` (`server/application.py`) that `main.py` uses, given a test config, so they test the app as it's deployed:
 - New tests can be plain functions using the pytest fixtures in `tests/conftest.py` (`app`, `client`), like seating's tests.
 - The existing tests are `unittest` classes built on `tests/unit/support.py`. `AppTestCase` gives an empty database and request helpers, and `CourseTestCase` adds two offerings, a staff member, a student and a lab in each.
 
-Put a test in the file for what it tests (`test_login.py`, `test_sheet_imports.py`, `test_section_settings.py`, ...), and add a file when nothing fits. Test files go in `tests/unit/` and are named `test_<subject>.py`, with test functions and methods named `test_<what it checks>`. pytest only looks in `tests/`, so a test file anywhere else, such as `server/`, never runs, locally or in CI.
+Put a test in the file for what it tests (`test_login.py`, `test_sheet_imports.py`, `test_section_settings.py`, ...), and add a file when nothing fits. Test files go in `tests/unit/` and are named `test_<subject>.py`, with test functions and methods named `test_<what it checks>`. `pytest` only looks in `tests/unit/`, so a test file anywhere else, such as `server/`, never runs, locally or in CI.
 
 CI uploads coverage of `server/` to [Codecov](https://app.codecov.io/gh/berkeley-cdss/sections), whose `codecov/project` check fails a PR that lowers coverage below main's (`codecov.yml`). Its PR comment also says how much of the PR's changed lines are tested. Separately, the tests job fails if coverage drops below 74%, its level when that minimum was set.
 
