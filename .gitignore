@@ -12,3 +12,6 @@ deploy/
 # Test coverage data
 .coverage
 coverage.xml
+
+# Accessibility audit reports and screenshots (docs/a11y.md)
+axe/

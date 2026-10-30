@@ -1,0 +1,39 @@
+name: A11y
+
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  audit-a11y-with-axe:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Bootstrap
+        uses: ./.github/actions/bootstrap
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "24"
+          cache: yarn
+      # the course pages are the React build, served from server/static as the Dockerfile does
+      - name: Build the frontend
+        run: |
+          yarn install --frozen-lockfile
+          yarn build
+          mkdir -p server/static
+          cp -R build/. server/static/
+      # the tests sign in through the fake Canvas and use Chrome, which the runner has
+      - name: Run A11y Audit
+        run: pytest tests/a11y
+      - name: Keep axe reports and screenshots
+        uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: axe
+          path: axe
+          if-no-files-found: ignore
+          retention-days: 7
