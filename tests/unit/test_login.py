@@ -151,6 +151,14 @@ class LoginTests(CourseTestCase):
         self.assertEqual(user["id"], self.staff_id)
         self.assertFalse(user["isStaff"])
 
+    def test_canvas_redirect_uses_the_host_not_x_forwarded_host(self):
+        response = self.get("/login/", headers={
+            "Host": "sections.test", "X-Forwarded-Proto": "https", "X-Forwarded-Host": "evil.test"})
+        location = response.headers["Location"]
+        self.assertTrue(location.startswith("https://canvas.test/login/oauth2/auth"))
+        self.assertIn("redirect_uri=https%3A%2F%2Fsections.test%2Fauthorized%2F", location)
+        self.assertNotIn("evil.test", location)
+
     def test_logged_out_pages_go_to_login_and_apis_return_401(self):
         with self.client.session_transaction() as browser:
             browser.clear()
