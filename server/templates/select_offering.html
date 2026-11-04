@@ -32,7 +32,7 @@
     </li>
   {% endif %}
   {% for offering in staff_offerings_existing %}
-    {{ offering_row(offering, removable=true) }}
+    {{ offering_row(offering, removable=offering.canvas_id in removable_ids) }}
   {% endfor %}
   </ul>
   <div class="text-center mb-4">
