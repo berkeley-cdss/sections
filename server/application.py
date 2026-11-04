@@ -33,7 +33,9 @@ def create_app(test_config: dict | None = None) -> Flask:
     # not index.html). Name templates *.html so that Flask autoescapes them.
     app.jinja_loader = ChoiceLoader([app.jinja_loader, FileSystemLoader(TEMPLATES_DIR)])
     # Cloud Run terminates TLS, so trust its X-Forwarded-Proto for external URLs.
-    app.wsgi_app = ProxyFix(app.wsgi_app, x_proto=1, x_host=1)
+    # Not X-Forwarded-Host: Cloud Run passes the requested Host through, and it
+    # doesn't overwrite X-Forwarded-Host, so that header is whatever the client sent.
+    app.wsgi_app = ProxyFix(app.wsgi_app, x_proto=1)
 
     if test_config is None:
         load_config(app)
