@@ -1,5 +1,5 @@
 import "bootstrap/dist/css/bootstrap.css";
-import { useContext, useState } from "react";
+import { useCallback, useContext, useRef, useState } from "react";
 import * as React from "react";
 import Alert from "react-bootstrap/Alert";
 import Button from "react-bootstrap/Button";
@@ -135,6 +135,10 @@ export default function AdminPage(): React.ReactNode {
   const [showImportEnrollmentModal, setShowImportEnrollmentModal] = useState(false);
   const [message, setMessage] = useState(config.message);
   const [staffUrl, setStaffUrl] = useState(config.staffUrl ?? "");
+  const [savingStaffUrl, setSavingStaffUrl] = useState(false);
+  const [staffUrlStatus, setStaffUrlStatus] = useState<{ text: string; variant: "success" | "danger" } | null>(
+    null
+  );
 
   const [removing, setRemoving] = useState(false);
   const removeStudents = useAPI("remove_students");
@@ -163,6 +167,36 @@ export default function AdminPage(): React.ReactNode {
   });
   const [resetting, setResetting] = useState(false);
   const resetSections = useAPI("reset_sections");
+
+  // Set by the success callback, so we know whether the save went through; a
+  // failure has already shown its error at the top of the page.
+  const staffUrlSaved = useRef(false);
+  const updateStaffUrl = useAPI(
+    "update_config",
+    useCallback(() => {
+      staffUrlSaved.current = true;
+    }, [])
+  );
+  const saveStaffUrl = async () => {
+    setStaffUrlStatus(null);
+    setSavingStaffUrl(true);
+    staffUrlSaved.current = false;
+    await updateStaffUrl({ staff_url: staffUrl });
+    setSavingStaffUrl(false);
+    if (staffUrlSaved.current) {
+      const url = staffUrl.trim();
+      setStaffUrl(url);
+      setStaffUrlStatus({
+        text: url ? "Staff page URL saved." : "Staff page link removed.",
+        variant: "success",
+      });
+    } else {
+      setStaffUrlStatus({
+        text: "The staff page URL wasn't saved. See the error at the top of the page.",
+        variant: "danger",
+      });
+    }
+  };
 
   const renderTabContent = (tab: SettingsTab) => (
     <Table striped hover>
@@ -233,14 +267,24 @@ export default function AdminPage(): React.ReactNode {
                     value={staffUrl}
                     onChange={(e) => setStaffUrl(e.target.value)}
                   />
-                  <Button variant="outline-secondary" onClick={() => updateConfig({ staff_url: staffUrl })}>
-                    Save
+                  <Button variant="outline-secondary" onClick={saveStaffUrl} disabled={savingStaffUrl}>
+                    {savingStaffUrl ? "Saving…" : "Save"}
                   </Button>
                 </InputGroup>
                 <div id="staff-url-help" className="form-text">
                   Shown as &ldquo;Staff&rdquo; in the nav bar. Use this semester&rsquo;s staff page; leave it blank
                   for no link.
                 </div>
+                {staffUrlStatus != null ? (
+                  <Alert
+                    className="mt-2"
+                    variant={staffUrlStatus.variant}
+                    onClose={() => setStaffUrlStatus(null)}
+                    dismissible
+                  >
+                    {staffUrlStatus.text}
+                  </Alert>
+                ) : null}
               </div>
 
               {/* Line 1: Import Buttons */}
