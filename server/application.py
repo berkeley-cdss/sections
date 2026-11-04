@@ -5,15 +5,15 @@ from flask_migrate import Migrate
 from jinja2 import ChoiceLoader, FileSystemLoader
 from werkzeug.middleware.proxy_fix import ProxyFix
 
-from config import load_config
-from dev_login import create_dev_login_page
-from errors import register_error_handlers
-from offerings import create_offering_pages
-from login import create_login_client
-from models import db
-from schema_check import check_schema_before_requests
-from security_headers import add_security_headers
-from state import create_state_client
+from server.config import load_config
+from server.dev_login import create_dev_login_page
+from server.errors import register_error_handlers
+from server.offerings import create_offering_pages
+from server.login import create_login_client
+from server.models import db
+from server.schema_check import check_schema_before_requests
+from server.security_headers import add_security_headers
+from server.state import create_state_client
 
 SERVER_DIR = os.path.dirname(os.path.abspath(__file__))
 TEMPLATES_DIR = os.path.join(SERVER_DIR, "templates")

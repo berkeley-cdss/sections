@@ -4,8 +4,8 @@ the app the same way."""
 
 import pytest
 
-from application import create_app
-from models import db as sqlalchemy_db
+from server.application import create_app
+from server.models import db as sqlalchemy_db
 from tests.unit.support import TEST_CONFIG
 
 

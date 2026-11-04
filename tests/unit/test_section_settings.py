@@ -1,7 +1,7 @@
 """Admins editing a section's staff, capacity, day and time."""
 
-from import_sheet import parse_time_string
-from models import Section, User, db
+from server.import_sheet import parse_time_string
+from server.models import Section, User, db
 from tests.unit.support import CS61A, CourseTestCase, DATA8, canvas_course
 
 

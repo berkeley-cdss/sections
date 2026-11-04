@@ -15,7 +15,7 @@ from flask import current_app, jsonify, request
 from sqlalchemy.exc import NoResultFound
 from werkzeug.exceptions import HTTPException
 
-from models import db
+from server.models import db
 
 API_MESSAGES = {
     401: "You've been signed out. Reload the page to sign in again.",

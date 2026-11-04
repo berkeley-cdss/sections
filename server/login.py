@@ -8,10 +8,10 @@ from flask_login import LoginManager, login_user, logout_user
 from markupsafe import escape
 from werkzeug.exceptions import HTTPException
 
-import canvas_service
-from errors import error_page, report_unexpected
-from offering import current_offering, in_offering
-from models import User, db, with_email
+from server import canvas_service
+from server.errors import error_page, report_unexpected
+from server.offering import current_offering, in_offering
+from server.models import User, db, with_email
 
 AFTER_LOGIN_KEY = "after_login"
 

@@ -11,11 +11,11 @@ from alembic.script import ScriptDirectory
 from flask import Flask
 from flask_migrate import Migrate, upgrade
 
-from application import MIGRATIONS_DIR as MIGRATIONS, TEMPLATES_DIR
-from errors import register_error_handlers
-from models import db
-from offerings import create_offering_pages
-from schema_check import check_schema_before_requests
+from server.application import MIGRATIONS_DIR as MIGRATIONS, TEMPLATES_DIR
+from server.errors import register_error_handlers
+from server.models import db
+from server.offerings import create_offering_pages
+from server.schema_check import check_schema_before_requests
 
 HEAD = ScriptDirectory(MIGRATIONS).get_current_head()
 
@@ -94,7 +94,7 @@ class SchemaCheckTests(unittest.TestCase):
             os.environ.pop("PREVIEW_PR", None)
             message = self.client.post("/offerings/1/api/refresh_state", json={}).get_json()["message"]
         self.assertIn(f"The database is at migration 0003_schema_cleanup, but this version of Sections "
-                      f"expects {HEAD}. Run `flask --app main db upgrade`", message)
+                      f"expects {HEAD}. Run `flask --app server.main db upgrade`", message)
 
     def test_result_is_cached_briefly(self):
         upgrade(revision="0003_schema_cleanup")
@@ -103,7 +103,7 @@ class SchemaCheckTests(unittest.TestCase):
         # Still the cached result...
         self.assertEqual(self.client.get("/page").status_code, 503)
         # ...until it expires.
-        with patch("schema_check.time.monotonic", return_value=10**9):
+        with patch("server.schema_check.time.monotonic", return_value=10**9):
             self.assertEqual(self.client.get("/page").status_code, 200)
 
 

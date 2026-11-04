@@ -14,8 +14,8 @@ from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from werkzeug.serving import make_server
 
-from application import SERVER_DIR, create_app
-from models import Attendance, AttendanceStatus, CourseConfig, Offering, Section, Session, User, db
+from server.application import SERVER_DIR, create_app
+from server.models import Attendance, AttendanceStatus, CourseConfig, Offering, Section, Session, User, db
 from tests.a11y.utils import REPORT_DIR, slugify
 from tests.unit.support import TEST_CONFIG, canvas_course
 

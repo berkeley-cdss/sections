@@ -1,6 +1,6 @@
 """Each course offering's sections, people and attendance stay separate."""
 
-from models import Attendance, AttendanceStatus, Section, Session, User, db, set_contains
+from server.models import Attendance, AttendanceStatus, Section, Session, User, db, set_contains
 from tests.unit.support import CS61A, CourseTestCase, DATA8, UNSET_UP, canvas_course
 
 

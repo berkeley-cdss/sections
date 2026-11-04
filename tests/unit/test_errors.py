@@ -7,7 +7,7 @@ from unittest.mock import patch
 
 from authlib.integrations.flask_client import FlaskOAuth2App
 
-from models import CourseConfig, Offering, Section, User, db
+from server.models import CourseConfig, Offering, Section, User, db
 from tests.unit.support import CS61A, AppTestCase
 
 
@@ -120,7 +120,7 @@ class ErrorTests(AppTestCase):
     def test_login_failures_after_bcourses_say_which_side_failed(self):
         token = {"user": {"id": 1}, "access_token": "access"}
         with patch.object(FlaskOAuth2App, "authorize_access_token", return_value=token), \
-                patch("login.complete_login", side_effect=RuntimeError("database is down")), \
+                patch("server.login.complete_login", side_effect=RuntimeError("database is down")), \
                 self.assertLogs(self.app.logger, "ERROR"):
             response = self.request("get", "/authorized/")
         self.assertEqual(response.status_code, 500)

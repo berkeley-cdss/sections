@@ -11,7 +11,7 @@ from json import dumps
 from urllib.parse import urlparse
 from typing import List, Optional, Union
 from zoneinfo import ZoneInfo
-from import_sheet import parse_section_times
+from server.import_sheet import parse_section_times
 
 import flask
 from flask import Blueprint, abort, g, jsonify, render_template, request, current_app, session
@@ -19,11 +19,11 @@ from flask_login import current_user, login_required
 from sqlalchemy import func
 from sqlalchemy.orm import joinedload, noload
 
-import canvas_service
-from offering import OFFERING_URL_PREFIX, get_canvas_course_id, get_course, get_course_name, load_offering
-from import_sheet import check_capacity, import_sections_from_url, import_enrollment_from_url, parse_capacity
+from server import canvas_service
+from server.offering import OFFERING_URL_PREFIX, get_canvas_course_id, get_course, get_course_name, load_offering
+from server.import_sheet import check_capacity, import_sections_from_url, import_enrollment_from_url, parse_capacity
 
-from models import (
+from server.models import (
     Attendance,
     AttendanceStatus,
     CourseConfig,

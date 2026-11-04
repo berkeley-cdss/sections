@@ -5,8 +5,8 @@ tests make sure they stay escaped."""
 import os
 import unittest
 
-from application import TEMPLATES_DIR
-from models import Offering, User, db
+from server.application import TEMPLATES_DIR
+from server.models import Offering, User, db
 from tests.unit.support import AppTestCase
 
 NAME = '<script>alert("x")</script> & co'

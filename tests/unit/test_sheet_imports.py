@@ -4,8 +4,8 @@ from unittest.mock import patch
 
 from flask import g
 
-from import_sheet import import_enrollment, import_sections, parse_time_string
-from models import Failure, Offering, Section, User, db
+from server.import_sheet import import_enrollment, import_sections, parse_time_string
+from server.models import Failure, Offering, Section, User, db
 from tests.unit.support import CS61A, CourseTestCase
 
 
@@ -101,7 +101,7 @@ class SheetImportsTests(CourseTestCase):
         with self.assertRaisesRegex(Exception, "^Row 2: .*1 students are already enrolled"):
             # setUp's lab is in Room from 0 to 3600, which isn't a weekday time,
             # so match it directly.
-            with patch("import_sheet.parse_time_string", side_effect=[0, 3600]):
+            with patch("server.import_sheet.parse_time_string", side_effect=[0, 3600]):
                 self.import_cs61a_sections(
                     ["staff@test", "Staff", "0", "Room", "M", "10:00a", "11:00a", "", "TRUE", "Lab"])
         db.session.remove()

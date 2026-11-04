@@ -6,8 +6,8 @@ from zoneinfo import ZoneInfo
 
 from flask_migrate import upgrade
 
-from main import app
-from models import Offering, Section, db, find_or_add_person
+from server.main import app
+from server.models import Offering, Section, db, find_or_add_person
 
 
 def seed(canvas_course_id: int):
@@ -70,5 +70,5 @@ def seed(canvas_course_id: int):
 
 if __name__ == "__main__":
     if len(sys.argv) != 2:
-        sys.exit("usage: python seed.py <canvas course id>  (e.g. 157 for Mango 101 on the sandbox)")
+        sys.exit("usage: python3 -m server.seed <canvas course id>  (e.g. 157 for Mango 101 on the sandbox)")
     seed(int(sys.argv[1]))

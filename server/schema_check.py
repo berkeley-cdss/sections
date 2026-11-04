@@ -15,8 +15,8 @@ from alembic.migration import MigrationContext
 from alembic.script import ScriptDirectory
 from flask import current_app, jsonify, request
 
-from errors import error_page, is_api_request
-from models import db
+from server.errors import error_page, is_api_request
+from server.models import db
 
 # How long to trust a result, so most requests don't query the database for it.
 CACHE_SECONDS = 60
@@ -49,7 +49,7 @@ def schema_problem(migrations_dir: str) -> str | None:
                 f"PR previews share the staging database and never run migrations, so this preview "
                 f"can't run. Merge the PR to see its changes on staging.")
     return (f"The database is at migration {db_names}, but this version of Sections expects {code_names}. "
-            f"Run `flask --app main db upgrade` from server/.")
+            f"Run `flask --app server.main db upgrade` from the repository root.")
 
 
 def check_schema_before_requests(app: flask.Flask, migrations_dir: str):
