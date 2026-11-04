@@ -82,6 +82,8 @@ export type CourseConfig = {
   canTutorsChangeTutoring: boolean;
   canTutorsReassignTutoring: boolean;
   message: string;
+  // The course staff page linked in the nav bar, or null for no link.
+  staffUrl: string | null;
 };
 
 export type State = {

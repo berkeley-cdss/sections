@@ -124,8 +124,6 @@ function CourseApp({ messages, setMessages }: CourseAppProps): React.ReactNode {
     );
   }
 
-  const is61A = /\b61A\b/.test(state.course);
-
   return (
     <Router basename={COURSE_BASE}>
       <Navbar className="navbar-sections" variant="dark" expand="md">
@@ -142,8 +140,8 @@ function CourseApp({ messages, setMessages }: CourseAppProps): React.ReactNode {
                   History
                 </Link>
               )}
-              {is61A && (
-                <Nav.Link href="https://cs61a.org/staff/" target="_blank" active>
+              {state.config.staffUrl && (
+                <Nav.Link href={state.config.staffUrl} target="_blank" rel="noopener noreferrer" active>
                   Staff
                 </Nav.Link>
               )}

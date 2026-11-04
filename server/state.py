@@ -8,6 +8,7 @@ from io import StringIO
 from datetime import datetime
 from functools import wraps
 from json import dumps
+from urllib.parse import urlparse
 from typing import List, Optional, Union
 from zoneinfo import ZoneInfo
 from import_sheet import parse_section_times
@@ -92,6 +93,33 @@ def parse_emails(emails):
 
 def get_config() -> CourseConfig:
     return CourseConfig.query.filter_by(course=get_course()).one()
+
+
+# The CourseConfig columns update_config may change: not its id or course.
+CONFIG_SETTINGS = {column.name for column in CourseConfig.__table__.columns
+                   if column.name.startswith("can_")} | {"message", "staff_url"}
+
+
+def clean_staff_url(value) -> str | None:
+    """The staff page URL to store, or None for no link. Only http(s) URLs, since
+    the nav bar links to it (a javascript: URL would run in the course's page)."""
+    if value is None:
+        return None
+    if not isinstance(value, str):
+        raise Failure("The staff page URL must be text")
+    value = value.strip()
+    if not value:
+        return None
+    check_fits("The staff page URL", value, CourseConfig.staff_url)
+    try:
+        parsed = urlparse(value)
+        ok = parsed.scheme.lower() in ("http", "https") and bool(parsed.hostname)
+    except ValueError:  # e.g. an unclosed [ in the host
+        ok = False
+    if not ok or re.search(r"\s", value):
+        raise Failure("The staff page URL must be a web address starting with https:// or http://")
+    return value
+
 
 def is_valid_api_secret(secret) -> bool:
     expected = current_app.config.get("API_SECRET")
@@ -616,7 +644,12 @@ def create_state_client(app: flask.Flask):
     @admin_required
     def update_config(**kwargs):
         config = get_config()
+        unknown = set(kwargs) - CONFIG_SETTINGS
+        if unknown:
+            raise Failure(f"Unknown setting: {', '.join(sorted(unknown))}")
         check_fits("The welcome message", kwargs.get("message"), CourseConfig.message)
+        if "staff_url" in kwargs:
+            kwargs["staff_url"] = clean_staff_url(kwargs["staff_url"])
         for key, value in kwargs.items():
             setattr(config, key, value)
         db.session.commit()

@@ -23,7 +23,7 @@ import AddStudentModal from "./AddStudentModal";
 import ResetSectionsModal from "./ResetSectionsModal";
 import MessageContext from "./MessageContext";
 
-type ConfigKey = Exclude<keyof CourseConfig, "message">;
+type ConfigKey = Exclude<keyof CourseConfig, "message" | "staffUrl">;
 
 type SettingsTab = {
   eventKey: string;
@@ -134,6 +134,7 @@ export default function AdminPage(): React.ReactNode {
   const [showImportSectionsModal, setShowImportSectionsModal] = useState(false);
   const [showImportEnrollmentModal, setShowImportEnrollmentModal] = useState(false);
   const [message, setMessage] = useState(config.message);
+  const [staffUrl, setStaffUrl] = useState(config.staffUrl ?? "");
 
   const [removing, setRemoving] = useState(false);
   const removeStudents = useAPI("remove_students");
@@ -220,6 +221,26 @@ export default function AdminPage(): React.ReactNode {
                 <Alert variant="info">
                   <ReactMarkdown>{message}</ReactMarkdown>
                 </Alert>
+              </div>
+              <div className="mb-3">
+                <label htmlFor="staff-url">Staff page URL:</label>
+                <InputGroup>
+                  <FormControl
+                    id="staff-url"
+                    type="url"
+                    placeholder="https://example.berkeley.edu/staff/"
+                    aria-describedby="staff-url-help"
+                    value={staffUrl}
+                    onChange={(e) => setStaffUrl(e.target.value)}
+                  />
+                  <Button variant="outline-secondary" onClick={() => updateConfig({ staff_url: staffUrl })}>
+                    Save
+                  </Button>
+                </InputGroup>
+                <div id="staff-url-help" className="form-text">
+                  Shown as &ldquo;Staff&rdquo; in the nav bar. Use this semester&rsquo;s staff page; leave it blank
+                  for no link.
+                </div>
               </div>
 
               {/* Line 1: Import Buttons */}
