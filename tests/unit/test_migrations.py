@@ -6,7 +6,7 @@ import sqlalchemy as sa
 from flask import Flask
 from alembic.autogenerate import compare_metadata
 from alembic.migration import MigrationContext
-from flask_migrate import Migrate, upgrade
+from flask_migrate import Migrate, downgrade, upgrade
 
 from application import MIGRATIONS_DIR as MIGRATIONS
 from models import db
@@ -94,6 +94,30 @@ class SingleUserMigrationTests(unittest.TestCase):
         self.assertIn(("section", "users"), foreign_keys)
         self.assertIn(("user_section", "users"), foreign_keys)
         self.assertNotIn("user", {referred for _, referred in foreign_keys})
+
+    def test_staff_url_keeps_the_61a_link(self):
+        """0005_staff_url gives the offerings that linked cs61a.org/staff/ that
+        link, and no other offering a link."""
+        upgrade(revision="0004_pronouns")
+        self.sql("""INSERT INTO offerings (id, canvas_id, "key", name, code) VALUES
+            (1, 101, 'cs61a', 'CS 61A', NULL),
+            (2, 102, 'cs61a-fa26', 'Fall 2026', 'COMPSCI 61A'),
+            (3, 103, 'cs61b', 'CS 61B', NULL),
+            (4, 104, 'data8', 'DATA 8', NULL),
+            (5, 105, 'cs161a', 'CS 161A', NULL),
+            (6, 106, 'cs61a-old', 'Old', NULL)""")
+        self.sql("""INSERT INTO course_config (id, course, message) VALUES
+            (1, 'cs61a', 'hi'), (2, 'cs61a-fa26', ''), (3, 'cs61b', ''), (4, 'data8', ''), (5, 'cs161a', '')""")
+        upgrade(revision="0005_staff_url")
+        self.assertEqual(self.sql("SELECT course, staff_url, message FROM course_config ORDER BY id"), [
+            ("cs61a", "https://cs61a.org/staff/", "hi"),
+            ("cs61a-fa26", "https://cs61a.org/staff/", ""),
+            ("cs61b", None, ""), ("data8", None, ""), ("cs161a", None, "")])
+        # No course_config row was made for the offering without one.
+        self.assertEqual(self.sql("SELECT count(*) FROM course_config WHERE course = 'cs61a-old'"), [(0,)])
+        downgrade(revision="0004_pronouns")
+        self.assertNotIn("staff_url", {c["name"] for c in sa.inspect(db.engine).get_columns("course_config")})
+        self.assertEqual(self.sql("SELECT count(*) FROM course_config"), [(5,)])
 
     def test_fresh_database(self):
         upgrade()

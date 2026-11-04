@@ -22,6 +22,7 @@ export default React.createContext<
     canTutorsChangeTutoring: true,
     canTutorsReassignTutoring: true,
     message: "",
+    staffUrl: null,
   },
   currentUser: null,
   serviceAccountEmail: null,

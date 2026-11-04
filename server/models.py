@@ -461,6 +461,8 @@ class CourseConfig(db.Model):
     can_tutors_reassign_tutoring = db.Column(db.Boolean, default=True)
 
     message: str = db.Column(db.String(1024), default="")
+    # The course staff page linked in the nav bar, if any (#25).
+    staff_url: str | None = db.Column(db.String(1024), nullable=True)
 
     @property
     def json(self):
@@ -478,6 +480,7 @@ class CourseConfig(db.Model):
             "canTutorsChangeTutoring": self.can_tutors_change_tutoring,
             "canTutorsReassignTutoring": self.can_tutors_reassign_tutoring,
             "message": self.message,
+            "staffUrl": self.staff_url,
         }
 
 
