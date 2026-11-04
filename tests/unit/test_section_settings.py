@@ -6,6 +6,27 @@ from tests.unit.support import CS61A, CourseTestCase, DATA8, canvas_course
 
 
 class SectionSettingsTests(CourseTestCase):
+    def test_call_links_must_be_web_addresses(self):
+        def set_link(link):
+            return self.api("update_section_call_link", section_id=str(self.section_id), call_link=link).get_json()
+
+        for link in ["javascript:alert(1)", "JavaScript://x/%0aalert(1)", "data:text/html,hi",
+                     "zoom.us/j/123", "https://", "https://zoom.us/j/1 23", 5]:
+            with self.subTest(link=link):
+                body = set_link(link)
+                self.assertFalse(body["success"])
+        self.assertIsNone(db.session.get(Section, self.section_id).call_link)
+        self.assertIn("must be a web address", set_link("zoom.us/j/123")["message"])
+
+        def saved():
+            db.session.remove()
+            return db.session.get(Section, self.section_id).call_link
+
+        self.assertTrue(set_link("  https://berkeley.zoom.us/j/123 ")["success"])
+        self.assertEqual(saved(), "https://berkeley.zoom.us/j/123")
+        self.assertTrue(set_link("")["success"])
+        self.assertIsNone(saved())  # a blank link removes it
+
     def test_admins_edit_capacity_but_not_below_enrollment(self):
         self.make_staff_admin()
         section = db.session.get(Section, self.section_id)

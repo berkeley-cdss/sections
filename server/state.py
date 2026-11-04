@@ -100,24 +100,25 @@ CONFIG_SETTINGS = {column.name for column in CourseConfig.__table__.columns
                    if column.name.startswith("can_")} | {"message", "staff_url"}
 
 
-def clean_staff_url(value) -> str | None:
-    """The staff page URL to store, or None for no link. Only http(s) URLs, since
-    the nav bar links to it (a javascript: URL would run in the course's page)."""
+def clean_url(label: str, value, column) -> str | None:
+    """The URL to store, or None for no link. Only http(s) URLs, since the page
+    links to it (a javascript: URL would run in the course's page). ``label``
+    names it in error messages, and it must fit ``column``."""
     if value is None:
         return None
     if not isinstance(value, str):
-        raise Failure("The staff page URL must be text")
+        raise Failure(f"{label} must be text")
     value = value.strip()
     if not value:
         return None
-    check_fits("The staff page URL", value, CourseConfig.staff_url)
+    check_fits(label, value, column)
     try:
         parsed = urlparse(value)
         ok = parsed.scheme.lower() in ("http", "https") and bool(parsed.hostname)
     except ValueError:  # e.g. an unclosed [ in the host
         ok = False
     if not ok or re.search(r"\s", value):
-        raise Failure("The staff page URL must be a web address starting with https:// or http://")
+        raise Failure(f"{label} must be a web address starting with https:// or http://")
     return value
 
 
@@ -506,8 +507,7 @@ def create_state_client(app: flask.Flask):
     def update_section_call_link(section_id: str, call_link: str):
         section_id = int(section_id)
         section = Section.query.filter_by(id=section_id, course=get_course()).one()
-        check_fits("The call link", call_link, Section.call_link)
-        section.call_link = call_link
+        section.call_link = clean_url("The call link", call_link, Section.call_link)
         db.session.commit()
         return refresh_state()
 
@@ -649,7 +649,7 @@ def create_state_client(app: flask.Flask):
             raise Failure(f"Unknown setting: {', '.join(sorted(unknown))}")
         check_fits("The welcome message", kwargs.get("message"), CourseConfig.message)
         if "staff_url" in kwargs:
-            kwargs["staff_url"] = clean_staff_url(kwargs["staff_url"])
+            kwargs["staff_url"] = clean_url("The staff page URL", kwargs["staff_url"], CourseConfig.staff_url)
         for key, value in kwargs.items():
             setattr(config, key, value)
         db.session.commit()
