@@ -1,6 +1,6 @@
 """The /offerings pages: listing, importing and removing course offerings."""
 
-from server.models import Offering, Section, db
+from server.models import Offering, Section, User, db
 from tests.unit.support import CS61A, CourseTestCase, DATA8, UNSET_UP, canvas_course, lab
 
 
@@ -40,7 +40,29 @@ class OfferingsPagesTests(CourseTestCase):
         self.assertIn(f'href="/offerings/{CS61A}/"', student_part)
         self.assertNotIn("/remove", page)  # only staff offerings can be removed
 
-    def test_staff_remove_offerings_and_keep_their_data(self):
+    def make_cs61a_admin(self):
+        staff = db.session.get(User, self.staff_id)
+        staff.canvas_courses = {**staff.canvas_courses, str(CS61A): canvas_course("CS 61A", staff=True, admin=True)}
+        db.session.commit()
+
+    def test_staff_who_arent_admins_cannot_remove_offerings(self):
+        # A TA sees the offering but no remove button, and can't post the form.
+        page = self.get("/offerings").get_data(as_text=True)
+        self.assertIn(f'href="/offerings/{CS61A}/"', page)
+        self.assertNotIn(f'action="/offerings/{CS61A}/remove"', page)
+        self.assertEqual(self.post(f"/offerings/{CS61A}/remove").status_code, 403)
+        self.assertIsNotNone(Offering.query.filter_by(canvas_id=CS61A).one_or_none())
+
+    def test_global_admins_remove_any_offering(self):
+        staff = db.session.get(User, self.staff_id)
+        staff.is_global_admin = True
+        db.session.commit()
+        self.assertIn(f'action="/offerings/{DATA8}/remove"', self.get("/offerings").get_data(as_text=True))
+        self.post(f"/offerings/{DATA8}/remove")
+        self.assertIsNone(Offering.query.filter_by(canvas_id=DATA8).one_or_none())
+
+    def test_admins_remove_offerings_and_keep_their_data(self):
+        self.make_cs61a_admin()
         page = self.get("/offerings").get_data(as_text=True)
         self.assertIn(f'action="/offerings/{CS61A}/remove"', page)
 

@@ -35,6 +35,13 @@ def _categorized_offerings(user):
     return newest_first(staff), newest_first(students), newest_first(other)
 
 
+def can_remove(user, canvas_id: int) -> bool:
+    """Whether ``user`` may take this offering off Sections: global admins, and
+    the course's admins in Canvas (Teachers and Lead TAs), not all of its staff."""
+    info = user.canvas_courses.get(str(canvas_id))
+    return user.is_global_admin or bool(info and info["is_admin"])
+
+
 def create_offering_pages(app: flask.Flask):
     # Stylesheets and scripts for the server-rendered pages (static/ holds the React build).
     app.register_blueprint(Blueprint("pages", __name__, static_folder="assets", static_url_path="/assets"))
@@ -55,6 +62,7 @@ def create_offering_pages(app: flask.Flask):
             staff_offerings_existing=staff,
             student_offerings_existing=students,
             other_offerings_existing=other,
+            removable_ids={o.canvas_id for o in staff if can_remove(current_user, o.canvas_id)},
         )
 
     @app.route("/offerings/new", methods=["GET", "POST"])
@@ -92,9 +100,8 @@ def create_offering_pages(app: flask.Flask):
         sections and attendance: they're stored under its key, not linked to the
         Offering row, so importing the course again brings them back."""
         offering = Offering.query.filter_by(canvas_id=canvas_id).first_or_404()
-        info = current_user.canvas_courses.get(str(canvas_id))
-        if not (current_user.is_global_admin or (info and info["is_staff"])):
-            abort(403, "You are not a staff member in this offering.")
+        if not can_remove(current_user, canvas_id):
+            abort(403, "Only course admins (instructors and Lead TAs) can remove an offering.")
         # Read before the delete expires them.
         key, name, display_name = offering.key, offering.name, offering.display_name
         db.session.delete(offering)
