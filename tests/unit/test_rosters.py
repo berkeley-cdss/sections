@@ -2,7 +2,7 @@
 
 from flask import g
 
-from models import Offering, Section, User, db
+from server.models import Offering, Section, User, db
 from tests.unit.support import CS61A, CourseTestCase
 
 

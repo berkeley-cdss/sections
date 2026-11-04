@@ -6,10 +6,10 @@ from typing import List, Iterator
 
 from zoneinfo import ZoneInfo
 
-from offering import get_course
-from google_sheets import read_spreadsheet
+from server.offering import get_course
+from server.google_sheets import read_spreadsheet
 from dataclasses import asdict, dataclass, field, fields
-from models import Failure, Section, check_fits, db, find_or_add_person, offering_member, user_section
+from server.models import Failure, Section, check_fits, db, find_or_add_person, offering_member, user_section
 
 # Sample Spreadsheet Link: https://docs.google.com/spreadsheets/d/1WL7gXiBxPe6aUFBKfEOVS6iY27ITy9mARupLoJX-ouE/edit?usp=sharing
 pst = ZoneInfo("US/Pacific")

@@ -1,6 +1,6 @@
 """The /offerings pages: listing, importing and removing course offerings."""
 
-from models import Offering, Section, db
+from server.models import Offering, Section, db
 from tests.unit.support import CS61A, CourseTestCase, DATA8, UNSET_UP, canvas_course, lab
 
 

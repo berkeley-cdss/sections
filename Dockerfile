@@ -52,8 +52,9 @@ ENV PATH="/opt/venv/bin:$PATH" \
     PORT=8080
 
 WORKDIR /app
-COPY --chown=app:app server/ .
-COPY --from=frontend --chown=app:app /build/build ./static
+# server/ stays a package under /app, so gunicorn and flask import server.main
+COPY --chown=app:app server/ ./server/
+COPY --from=frontend --chown=app:app /build/build ./server/static
 
 USER app
 
@@ -66,4 +67,4 @@ HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
 # which share the staging database), apply database migrations before starting.
 # `exec` keeps gunicorn as PID 1 so it gets SIGTERM directly on redeploy.
 # One worker process with threads, as in seating: Cloud Run's default instance is 1 vCPU.
-CMD ["sh", "-c", "if [ \"$RUN_MIGRATIONS\" = true ]; then flask --app main db upgrade || exit 1; fi; exec gunicorn -b 0.0.0.0:${PORT:-8080} main:app --workers ${WEB_CONCURRENCY:-1} --threads ${GUNICORN_THREADS:-8} --timeout ${GUNICORN_TIMEOUT:-120} --access-logfile -"]
+CMD ["sh", "-c", "if [ \"$RUN_MIGRATIONS\" = true ]; then flask --app server.main db upgrade || exit 1; fi; exec gunicorn -b 0.0.0.0:${PORT:-8080} server.main:app --workers ${WEB_CONCURRENCY:-1} --threads ${GUNICORN_THREADS:-8} --timeout ${GUNICORN_TIMEOUT:-120} --access-logfile -"]

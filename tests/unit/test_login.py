@@ -4,8 +4,8 @@ from unittest.mock import patch
 
 from flask import session
 
-from login import complete_login
-from models import Attendance, AttendanceStatus, Section, Session, User, db
+from server.login import complete_login
+from server.models import Attendance, AttendanceStatus, Section, Session, User, db
 from tests.unit.support import CS61A, CourseTestCase, DATA8, canvas_course, lab
 
 
@@ -16,9 +16,9 @@ class LoginTests(CourseTestCase):
                 session["canvas_access_token"] = "previous"
                 session["canvas_token_expires_at"] = 123
                 courses = {str(CS61A): canvas_course("CS 61A", staff=is_staff, student=not is_staff)}
-                with patch("login.canvas_service.get_profile",
+                with patch("server.login.canvas_service.get_profile",
                            return_value={"primary_email": "staff@test", "short_name": "Staff"}), \
-                     patch("login.canvas_service.get_user_courses", return_value=courses):
+                     patch("server.login.canvas_service.get_user_courses", return_value=courses):
                     complete_login({
                         "user": {"id": 1}, "access_token": "access",
                         "refresh_token": "must-not-be-stored", "expires_in": 3600,
@@ -40,9 +40,9 @@ class LoginTests(CourseTestCase):
         db.session.add(imported)
         db.session.commit()
         with self.app.test_request_context(), \
-             patch("login.canvas_service.get_profile",
+             patch("server.login.canvas_service.get_profile",
                    return_value={"primary_email": "tutor@test", "short_name": "Canvas Name"}), \
-             patch("login.canvas_service.get_user_courses",
+             patch("server.login.canvas_service.get_user_courses",
                    return_value={str(CS61A): canvas_course("CS 61A", staff=True)}):
             complete_login({"user": {"id": 77}, "access_token": "access"})
         self.assertEqual(User.query.filter_by(email="tutor@test").count(), 1)
@@ -119,8 +119,8 @@ class LoginTests(CourseTestCase):
     def test_admin_override_course_makes_global_admin(self):
         self.app.config["ADMIN_OVERRIDE_CANVAS_COURSE_ID"] = 999
         with self.app.test_request_context(), \
-             patch("login.canvas_service.get_profile", return_value={"primary_email": "boss@test"}), \
-             patch("login.canvas_service.get_user_courses",
+             patch("server.login.canvas_service.get_profile", return_value={"primary_email": "boss@test"}), \
+             patch("server.login.canvas_service.get_user_courses",
                    return_value={"999": canvas_course("Override", student=True)}):
             complete_login({"user": {"id": 9}, "access_token": "access"})
             self.assertIsNotNone(session.get("canvas_access_token"))

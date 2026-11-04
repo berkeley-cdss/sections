@@ -6,7 +6,7 @@ load_offering resolves that ID to an Offering row for the rest of the request.
 
 from flask import abort, g
 
-from models import Offering
+from server.models import Offering
 
 # Matches seating's offering URLs.
 OFFERING_URL_PREFIX = "/offerings/<int:canvas_course_id>"

@@ -15,15 +15,15 @@ Requires Python 3.14 and Node 24 (`mise install` picks both up from `mise.toml`)
    pip install -r server/requirements.txt
    ```
 3. Install the frontend dependencies with `yarn install`.
-4. Create or update the local database with `flask --app main db upgrade` from `server/`.
-5. Run both with `yarn dev`, or separately: the backend with `python3 main.py` from `server/` (port 8000) and the frontend with `yarn start` (the Vite dev server on port 3000, which forwards API calls, the login routes and `/offerings` to port 8000).
+4. Create or update the local database with `flask --app server.main db upgrade` from the repository root. `server/` is a package, so run the app's commands from the root, as below.
+5. Run both with `yarn dev`, or separately: the backend with `python3 -m server.main` (port 8000) and the frontend with `yarn start` (the Vite dev server on port 3000, which forwards API calls, the login routes and `/offerings` to port 8000).
 6. Install the test dependencies with `pip install -r requirements-dev.txt`, then run the backend tests with `pytest` from the repository root (see [Tests](#tests)).
 
 ## Tests
 
-Tests live in `tests/`, as in seating: `tests/unit/` holds tests that use Flask's test client against an in-memory SQLite database, and `tests/a11y/` audits every page's accessibility in a browser ([docs/a11y.md](docs/a11y.md)). `pytest.ini` puts `server/` on the import path, so tests import the app's modules the way the app does (`from models import db`). `pytest` from the repository root runs the unit tests, and `pytest tests/a11y` runs the a11y audit. CI (`.github/workflows/test.yml`) runs them on Python 3.14, the version the Dockerfile uses, and adds a coverage report to the run's summary page.
+Tests live in `tests/`, as in seating: `tests/unit/` holds tests that use Flask's test client against an in-memory SQLite database, and `tests/a11y/` audits every page's accessibility in a browser ([docs/a11y.md](docs/a11y.md)). `server/` is a package, and `pytest.ini` puts the repository root on the import path, so tests import the app's modules the way the app does (`from server.models import db`). `pytest` from the repository root runs the unit tests, and `pytest tests/a11y` runs the a11y audit. CI (`.github/workflows/test.yml`) runs them on Python 3.14, the version the Dockerfile uses, and adds a coverage report to the run's summary page.
 
-Tests build the app with the same `create_app` (`server/application.py`) that `main.py` uses, given a test config, so they test the app as it's deployed:
+Tests build the app with the same `create_app` (`server/application.py`) that `server/main.py` uses, given a test config, so they test the app as it's deployed:
 - New tests can be plain functions using the pytest fixtures in `tests/conftest.py` (`app`, `client`), like seating's tests.
 - The existing tests are `unittest` classes built on `tests/unit/support.py`. `AppTestCase` gives an empty database and request helpers, and `CourseTestCase` adds two offerings, a staff member, a student and a lab in each.
 
@@ -35,7 +35,7 @@ CI uploads coverage of `server/` to [Codecov](https://app.codecov.io/gh/berkeley
 
 One deployment serves every bCourses course, with the same routes as seating. Users log in through Canvas OAuth (`/login/`, which returns to `/authorized/`), and `/offerings` lists their courses. Each course offering lives under `/offerings/<canvas course id>/`. Roles come from each Canvas enrollment at sign-in: Teachers and TAs are staff, and Teachers and Lead TAs are admins. Members of the `ADMIN_OVERRIDE_CANVAS_COURSE_ID` course are staff and admin everywhere. Someone added to a course after signing in needs to sign out and in again.
 
-Course staff set up Sections for a course with "Import courses from Canvas" (`/offerings/new`). Offerings moved from the monorepo store their data under an old key (`cs61a`, `data8`, ...); link each one to its Canvas course with `flask --app main link-offering <canvas id> <key> "<name>"`, run from `server/` against that database.
+Course staff set up Sections for a course with "Import courses from Canvas" (`/offerings/new`). Offerings moved from the monorepo store their data under an old key (`cs61a`, `data8`, ...); link each one to its Canvas course with `flask --app server.main link-offering <canvas id> <key> "<name>"`, run from the repository root against that database.
 
 To sign in locally against the sandbox (`MOCK_CANVAS=false`), open `localhost:3000/offerings` and log in. This works on port 3000 if the sandbox developer key allows `http://localhost:3000/authorized/` as a redirect URI. Otherwise, log in at `localhost:8000/login/` instead, then go back to `localhost:3000`. A "template not found" error for course pages on port 8000 is expected, because the built frontend isn't served in development.
 
@@ -43,7 +43,7 @@ To sign in locally against the sandbox (`MOCK_CANVAS=false`), open `localhost:30
 
 As in seating, development uses a fake Canvas unless `MOCK_CANVAS=false`, so a fresh checkout can be signed into without any Canvas credentials, and tests can sign in without reaching Canvas. Logging in goes to `/dev_login/`, which lists the seeded users and their roles in each course; pick one to sign in as them. Their profiles, courses and enrollments are in `server/fake_canvas_data/` (the same users and courses as seating's, plus a teacher, Oski Bear, so that admin pages can be tried), and `server/fake_canvas.py` answers the Canvas calls in `server/canvas_service.py` from them. Staff can import those courses with "Import courses from Canvas" and add their students by email as usual. Staging and production never use the fake Canvas, whatever `MOCK_CANVAS` says, and `/dev_login/` only redirects home there.
 
-To try the sample sections with it, sign in as Oski Bear, then run `python3 seed.py 1234567` or the imports below with `--course 1234567`.
+To try the sample sections with it, sign in as Oski Bear, then run `python3 -m server.seed 1234567` or the imports below with `--course 1234567`.
 
 ### About the Sandbox
 
@@ -60,24 +60,24 @@ bCourses API keys have strict scope and permissions. bCourses API keys should on
 ## Import Test Sections Locally
 
 1. Start the server and front end.
-2. Set up your sandbox course, either by signing in and using "Import courses from Canvas" on `localhost:3000/offerings`, or with `python3 seed.py 157` from `server/` (157 is Mango 101 on the sandbox; this also adds demo sections).
-3. From the `server` directory, import example sections and enrollment into that course:
+2. Set up your sandbox course, either by signing in and using "Import courses from Canvas" on `localhost:3000/offerings`, or with `python3 -m server.seed 157` (157 is Mango 101 on the sandbox; this also adds demo sections).
+3. From the repository root, import example sections and enrollment into that course:
 
 ```
-python3 import_locally.py --course 157 --type sections --file test_csvs/test_sections.csv
-python3 import_locally.py --course 157 --type enrollment --file test_csvs/disc_enrollment.csv
-python3 import_locally.py --course 157 --type enrollment --file test_csvs/lab_enrollment.csv
+python3 -m server.import_locally --course 157 --type sections --file server/test_csvs/test_sections.csv
+python3 -m server.import_locally --course 157 --type enrollment --file server/test_csvs/disc_enrollment.csv
+python3 -m server.import_locally --course 157 --type enrollment --file server/test_csvs/lab_enrollment.csv
 ```
 
 4. Open `localhost:3000/offerings/157/`; you should see the example sections.
 
 ## Database Migrations
 
-The schema is managed with Flask-Migrate (Alembic); migrations live in `server/migrations/versions`. To change the schema, edit `server/models.py`, then from `server/`:
+The schema is managed with Flask-Migrate (Alembic); migrations live in `server/migrations/versions`. To change the schema, edit `server/models.py`, then from the repository root:
 
 ```
-flask --app main db migrate -m "describe the change"   # generates a migration; review and edit it
-flask --app main db upgrade                             # applies it to your local database
+flask --app server.main db migrate -m "describe the change"   # generates a migration; review and edit it
+flask --app server.main db upgrade                             # applies it to your local database
 ```
 
 Commit the migration with the model change. Deployments with `RUN_MIGRATIONS=true` (staging and production) run `flask db upgrade` when they start; PR previews never do, because they share the staging database.
@@ -86,11 +86,11 @@ Commit the migration with the model change. Deployments with `RUN_MIGRATIONS=tru
 
 Sections checks that the database's migration matches the code's latest migration (`server/schema_check.py`). While they differ, every page, API call and `/health` returns 503 with a message saying why, rather than failing on the first query that uses a missing column. The check is repeated at most once a minute.
 
-This means **a PR that adds a migration can't be tried on its preview.** The preview shares the staging database, which only gets the migration when the PR is merged and staging deploys, so the preview shows "This is a preview of PR #N, which adds a database migration… Merge the PR to see its changes on staging." Test such a PR locally (`flask --app main db upgrade` against your own database), then merge it and check staging.
+This means **a PR that adds a migration can't be tried on its preview.** The preview shares the staging database, which only gets the migration when the PR is merged and staging deploys, so the preview shows "This is a preview of PR #N, which adds a database migration… Merge the PR to see its changes on staging." Test such a PR locally (`flask --app server.main db upgrade` against your own database), then merge it and check staging.
 
 The reverse also happens: after another PR with a migration is merged, staging's database is ahead of a preview whose branch doesn't have that migration. The preview then says to merge main into the PR's branch, which redeploys the preview with the migration.
 
-Locally, the same check tells you to run `flask --app main db upgrade` when your database is behind, for example after pulling a new migration.
+Locally, the same check tells you to run `flask --app server.main db upgrade` when your database is behind, for example after pulling a new migration.
 
 ## Import Sections from GCP
 1. Download the sections database to obtain a `.sql` file. Relevant Links [1](https://cloud.google.com/sql/docs/mysql/import-export/import-export-sql) and [2](https://cloud.google.com/storage/docs/downloading-objects).

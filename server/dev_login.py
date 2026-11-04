@@ -4,9 +4,9 @@ while canvas_service.is_mock_canvas(), so never in staging or production."""
 import flask
 from flask import abort, redirect, render_template, request, url_for
 
-import canvas_service
-from fake_canvas_data import FAKE_COURSES, FAKE_ENROLLMENTS, FAKE_USERS
-from login import finish_login
+from server import canvas_service
+from server.fake_canvas_data import FAKE_COURSES, FAKE_ENROLLMENTS, FAKE_USERS
+from server.login import finish_login
 
 
 def mock_user_roster():

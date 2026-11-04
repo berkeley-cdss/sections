@@ -7,11 +7,11 @@ from unittest import mock
 
 from flask import Flask
 
-import canvas_service
-from config import load_config
-from dev_login import mock_user_roster
-from models import Offering, User, db
-from offering import load_offering
+from server import canvas_service
+from server.config import load_config
+from server.dev_login import mock_user_roster
+from server.models import Offering, User, db
+from server.offering import load_offering
 from tests.unit.support import AppTestCase, lab
 
 ENV = {"FLASK_ENV": "development", "SECRET_KEY": "test", "DATABASE_URL": "sqlite:///:memory:"}
@@ -27,7 +27,7 @@ def configured(**overrides):
     env = {**ENV, **overrides}
     app = Flask(__name__)
     # Ignore a developer's own .env.
-    with mock.patch.dict(os.environ, env, clear=True), mock.patch("config.load_dotenv"):
+    with mock.patch.dict(os.environ, env, clear=True), mock.patch("server.config.load_dotenv"):
         load_config(app)
     return app.config
 

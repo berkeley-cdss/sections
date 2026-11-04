@@ -7,10 +7,10 @@ from unittest.mock import patch
 
 from flask import g
 
-from application import create_app
-from import_sheet import import_sections
-from login import complete_login
-from models import Offering, Section, User, db
+from server.application import create_app
+from server.import_sheet import import_sections
+from server.login import complete_login
+from server.models import Offering, Section, User, db
 
 TEST_CONFIG = {
     "SECRET_KEY": "test",
@@ -131,9 +131,9 @@ class CourseTestCase(AppTestCase):
 
     def log_in_as(self, canvas_id, email, courses=None, **profile):
         with self.app.test_request_context(), \
-             patch("login.canvas_service.get_profile",
+             patch("server.login.canvas_service.get_profile",
                    return_value={"primary_email": email, "short_name": "Name", **profile}), \
-             patch("login.canvas_service.get_user_courses", return_value=courses or {}):
+             patch("server.login.canvas_service.get_user_courses", return_value=courses or {}):
             complete_login({"user": {"id": canvas_id}, "access_token": "access"})
 
     SECTIONS_HEADER = ["Email", "Name", "Capacity", "Location", "Day", "Start", "End", "Tags",

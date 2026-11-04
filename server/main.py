@@ -1,6 +1,7 @@
-from application import create_app
+from server.application import create_app
 
-# gunicorn serves main:app, and `flask --app main ...` runs commands against it.
+# gunicorn serves server.main:app, and `flask --app server.main ...` (run from the
+# repository root) runs commands against it.
 app = create_app()
 
 

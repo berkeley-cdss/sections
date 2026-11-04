@@ -1,6 +1,6 @@
 """Admins changing the course's settings, including its staff page link (#25)."""
 
-from models import CourseConfig, db
+from server.models import CourseConfig, db
 from tests.unit.support import CourseTestCase
 
 

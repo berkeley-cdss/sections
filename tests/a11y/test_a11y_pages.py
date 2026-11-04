@@ -11,7 +11,7 @@ from dataclasses import dataclass
 
 import pytest
 
-from application import create_app
+from server.application import create_app
 from tests.a11y.conftest import COURSE, LAB_ID, STUDENT, STUDENT_ID, TA, TEACHER, VIOLATIONS_BY_RULE
 from tests.a11y.utils import COMPLETE_A11Y_STANDARDS, REQUIRED_A11Y_STANDARDS, assert_no_violations, run_axe, \
     save_report

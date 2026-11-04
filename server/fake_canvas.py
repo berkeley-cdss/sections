@@ -5,7 +5,7 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
-from fake_canvas_data import FAKE_COURSES, FAKE_ENROLLMENTS, FAKE_USERS
+from server.fake_canvas_data import FAKE_COURSES, FAKE_ENROLLMENTS, FAKE_USERS
 
 
 class FakeCanvas:

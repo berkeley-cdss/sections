@@ -1,7 +1,7 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 
-// In development the Flask backend runs on :8000 (`python3 server/main.py`).
+// In development the Flask backend runs on :8000 (`python3 -m server.main`).
 const backend = "http://localhost:8000";
 
 export default defineConfig({
