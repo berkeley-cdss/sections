@@ -13,6 +13,7 @@ import Container from "react-bootstrap/Container";
 import Row from "react-bootstrap/Row";
 import ReactMarkdown from "react-markdown";
 import { Navigate } from "react-router-dom";
+import ApiKeysTab from "./ApiKeysTab";
 import ImportSectionsModal from "./ImportSectionsModal";
 import ImportEnrollmentModal from "./ImportEnrollmentModal";
 import type { CourseConfig } from "./models";
@@ -357,6 +358,9 @@ export default function AdminPage(): React.ReactNode {
                 {renderTabContent(tab)}
               </Tab>
             ))}
+            <Tab eventKey="api-keys" title="API Keys" mountOnEnter>
+              <ApiKeysTab />
+            </Tab>
           </Tabs>
         </Col>
       </Row>

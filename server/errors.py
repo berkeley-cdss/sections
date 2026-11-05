@@ -66,7 +66,10 @@ def register_error_handlers(app: flask.Flask):
     @app.errorhandler(HTTPException)
     def http_error(error: HTTPException):
         if is_api_request():
-            message = API_MESSAGES.get(error.code, error.description)
+            # API key requests (/api/sudo/) aren't from a browser that was
+            # signed out, so they keep the specific reason.
+            browser = "/api/sudo/" not in request.path
+            message = API_MESSAGES.get(error.code, error.description) if browser else error.description
             return jsonify({"success": False, "message": message}), error.code
         return error_page(f"{error.code} {error.name}", error.description, error.code)
 

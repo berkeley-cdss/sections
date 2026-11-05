@@ -98,20 +98,29 @@ Locally, the same check tells you to run `flask --app server.main db upgrade` wh
 3. In the `server` directory, delete `app.db` and run `sqlite3 app.db < gcp-sections-export.sql`.
 
 ## API
-Functions marked with the `@api` decorator are also exposed at `/api/sudo/<name>`, which runs the function as the user with the given email. These endpoints are disabled unless the `API_SECRET` environment variable is set, and every request must include that secret. Anyone with the secret can act as any user, so store it in Secret Manager and never commit it. Example request:
+Functions marked with the `@api` decorator are also exposed at `/offerings/<canvas course id>/api/sudo/<name>`, for scripts. Each request needs an API key, which a course admin (an instructor or Lead TA in bCourses) makes on the course's Admin page, under API Keys. A key:
+
+- works only in the course it was made in, and only while its owner is an admin there;
+- stops working if its owner hasn't signed in to Sections for 7 days (`API_KEY_ROLE_MAX_AGE`, in seconds), because bCourses roles are only read at sign-in. Signing in again starts it working;
+- runs the function as its owner, or as the course member whose `email` the request names; never as anyone outside the course;
+- can't list, create, revoke or rotate keys. Do that on the Admin page, where any admin can revoke any key in the course and rotate their own.
+
+Only a hash of each key is stored, so a key is shown once, when it's made. Every request made with a key is logged (`sections.api_keys`) with the key, its owner, the function and who it ran as. After 10 failed key attempts in 15 minutes, a client is refused (HTTP 429) until the window passes. Example request:
 
 ```
 curl -X POST \
+  -H "Authorization: Bearer $SECTIONS_API_KEY" \
   -H "Content-Type: application/json" \
   -d '{
-        "secret": "",
-        "email": "", # the user to act as
+        "email": "<staff>@berkeley.edu",
         "args": {
             "email": "<student>@berkeley.edu"
         }
       }' \
-  "https://<sections-host>/api/sudo/get_student_discussion_attendance"
+  "https://<sections-host>/offerings/<canvas course id>/api/sudo/get_student_discussion_attendance"
 ```
+
+Leave out `"email"` to run as the key's owner. Responses are `{"success": true, "data": ...}`, or `{"success": false, "message": ...}` with an HTTP error status when the key is refused.
 
 ## Notes
 1. Use `yarn typecheck` (TypeScript) and `yarn lint` (ESLint); CI runs both.

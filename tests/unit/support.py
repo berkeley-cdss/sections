@@ -73,7 +73,7 @@ class AppTestCase(unittest.TestCase):
         # setUp keeps an app context open for database access, and Flask reuses
         # it for test requests, so per-request values on g would otherwise leak
         # between requests. In production each request gets a fresh context.
-        for key in ("offering", "_login_user"):
+        for key in ("offering", "_login_user", "api_key"):
             g.pop(key, None)
 
     def api(self, method, canvas_course_id=CS61A, **args):
