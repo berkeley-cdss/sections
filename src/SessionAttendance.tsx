@@ -1,5 +1,5 @@
 import moment from "moment";
-import { useState } from "react";
+import { useContext, useState } from "react";
 import Button from "react-bootstrap/Button";
 import Card from "react-bootstrap/Card";
 import Table from "react-bootstrap/Table";
@@ -8,8 +8,9 @@ import styled from "styled-components";
 import AddStudentModal from "./AddStudentModal";
 import AttendanceRow from "./AttendanceRow";
 import Pronouns from "./Pronouns";
-import { nextSessionStartTime } from "./models";
+import { canEditSection, nextSessionStartTime } from "./models";
 import type { AttendanceStatusType, Person, SectionDetails, Session } from "./models";
+import StateContext from "./StateContext";
 import useSectionAPI from "./useSectionAPI";
 
 const TableHolder = styled.div`
@@ -32,6 +33,8 @@ export default function SessionAttendance({ section, session }: Props) {
   const startSession = useSectionAPI("start_session");
   const setAttendance = useSectionAPI("set_attendance");
 
+  const { currentUser } = useContext(StateContext);
+  const canEdit = canEditSection(currentUser, section);
   const [adding, setAdding] = useState(false);
 
   const mostRecentSession =
@@ -84,7 +87,7 @@ export default function SessionAttendance({ section, session }: Props) {
               )}
               {session == null && " (not started)"}
             </b>
-            {session == null ? (
+            {!canEdit ? null : session == null ? (
               <Button
                 variant="primary"
                 size="sm"
@@ -115,10 +118,10 @@ export default function SessionAttendance({ section, session }: Props) {
                   </td>
                   <td>
                     <AttendanceRow
-                      editable={session != null}
+                      editable={canEdit && session != null}
                       status={getStudentAttendanceStatus(student.email)}
                       onClick={(status) => {
-                        if (session != null)
+                        if (canEdit && session != null)
                           setAttendance({
                             session_id: session.id,
                             students: student.email,
@@ -133,7 +136,7 @@ export default function SessionAttendance({ section, session }: Props) {
           </Table>
         </TableHolder>
       </Card>
-      {session != null && (
+      {canEdit && session != null && (
         <AddStudentModal
           show={adding}
           onAdd={(addedStudents) =>

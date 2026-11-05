@@ -1,16 +1,29 @@
-import { useState } from "react";
+import { useContext, useState } from "react";
 import Button from "react-bootstrap/Button";
 import AddSessionModal from "./AddSessionModal";
 
+import { canEditSection } from "./models";
 import type { SectionDetails } from "./models";
 import SessionAttendance from "./SessionAttendance";
+import StateContext from "./StateContext";
 
 type Props = {
   section: SectionDetails;
 };
 
 export default function SectionAttendance({ section }: Props) {
+  const { currentUser } = useContext(StateContext);
   const [adding, setAdding] = useState(false);
+
+  if (!canEditSection(currentUser, section)) {
+    // Past sessions, read-only; there's nothing to start or add.
+    return section.sessions
+      .slice()
+      .reverse()
+      .map((session) => (
+        <SessionAttendance key={session.startTime} session={session} section={section} />
+      ));
+  }
 
   return (
     <>

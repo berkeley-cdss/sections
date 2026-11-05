@@ -82,7 +82,8 @@ class AppTestCase(unittest.TestCase):
 
 class CourseTestCase(AppTestCase):
     """Two offerings (CS 61A, moved from the monorepo, and DATA 8), a staff
-    member and a student in CS 61A, and a lab in each, signed in as staff."""
+    member and a student in CS 61A, and a lab in each (CS 61A's taught by
+    that staff member), signed in as staff."""
 
     def setUp(self):
         super().setUp()
@@ -103,6 +104,7 @@ class CourseTestCase(AppTestCase):
         })
         self.known.set_role("cs61a", is_staff=False)
         section = lab("cs61a")
+        section.staff = self.staff  # so the signed-in staff member can edit it
         data8_section = lab(str(DATA8), location="Elsewhere")
         db.session.add_all([self.staff, self.known, section, data8_section])
         db.session.commit()
