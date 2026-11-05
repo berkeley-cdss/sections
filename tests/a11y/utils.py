@@ -1,8 +1,9 @@
 """Running axe-core on a page and reporting what it finds, as in seating's tests/a11y/utils.py."""
 
 import json
-import re
 from pathlib import Path
+
+from tests.browser import slugify
 
 AXE_SCRIPT_PATH = Path(__file__).parent / "axe.min.js"
 AXE_SCRIPT_CONTENT = None
@@ -61,10 +62,6 @@ def save_report(title, report):
     REPORT_DIR.mkdir(parents=True, exist_ok=True)
     with open(REPORT_DIR / f"{slugify(title)}.json", "w") as f:
         json.dump(report, f, indent=2)
-
-
-def slugify(text):
-    return re.sub(r"[^\w.-]+", "-", text).strip("-")
 
 
 def assert_no_violations(report):

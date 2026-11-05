@@ -15,3 +15,6 @@ coverage.xml
 
 # Accessibility audit reports and screenshots (docs/a11y.md)
 axe/
+
+# Screenshots of failed end to end tests (docs/e2e.md)
+e2e-screenshots/
