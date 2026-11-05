@@ -14,6 +14,12 @@ from server.offering import current_offering, in_offering
 from server.models import User, db, with_email
 
 AFTER_LOGIN_KEY = "after_login"
+# When the user last signed in through Canvas, in the (signed) session cookie.
+SIGNED_IN_AT_KEY = "signed_in_at"
+# Roles come from Canvas only at sign-in, so a sign-in older than this is
+# refused and the user signs in again, picking up any role they've gained or
+# lost. Overridable with the SIGN_IN_MAX_AGE config value, in seconds.
+DEFAULT_SIGN_IN_MAX_AGE = 12 * 60 * 60
 
 
 def _safe_next(target):
@@ -21,6 +27,14 @@ def _safe_next(target):
     if target and target.startswith("/") and not target.startswith("//"):
         return target
     return None
+
+
+def sign_in_expired() -> bool:
+    """Whether this session's sign-in is too old to trust its Canvas roles, or
+    has no sign-in time (sessions and remember cookies from before it was kept)."""
+    signed_in_at = session.get(SIGNED_IN_AT_KEY)
+    max_age = current_app.config.get("SIGN_IN_MAX_AGE", DEFAULT_SIGN_IN_MAX_AGE)
+    return not isinstance(signed_in_at, (int, float)) or time.time() - signed_in_at > max_age
 
 
 def complete_login(token: dict):
@@ -58,8 +72,11 @@ def complete_login(token: dict):
     user.is_global_admin = override_id is not None and str(override_id) in courses
     db.session.commit()
 
-    login_user(user, remember=True)
+    # No remember cookie: it holds no time, so it would sign the user back in
+    # with roles from their last sign-in for as long as the browser keeps it.
+    login_user(user)
     session.permanent = True
+    session[SIGNED_IN_AT_KEY] = time.time()
     # Keep only a short-lived access token, and only for staff, who need it to
     # look up students; reauthorize when it expires.
     session.pop("canvas_access_token", None)
@@ -124,7 +141,9 @@ def create_login_client(app: flask.Flask):
     @login_manager.user_loader
     def load_user(session_id):
         user_id = User.parse_session_id(session_id)
-        user = db.session.get(User, user_id) if user_id else None
+        if user_id is None or sign_in_expired():
+            return None
+        user = db.session.get(User, user_id)
         if user is not None and in_offering() and not sync_offering_role(user):
             abort(403, "You aren't enrolled in this course on bCourses. If you just "
                        "enrolled, sign out and sign in again.")
@@ -157,6 +176,7 @@ def create_login_client(app: flask.Flask):
 
     @app.route("/logout/")
     def logout():
+        session.pop(SIGNED_IN_AT_KEY, None)
         session.pop("canvas_access_token", None)
         session.pop("canvas_token_expires_at", None)
         logout_user()

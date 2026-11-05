@@ -58,6 +58,7 @@ class AppTestCase(unittest.TestCase):
     def sign_in(self, user):
         with self.client.session_transaction() as browser:
             browser["_user_id"] = user.get_id()
+            browser["signed_in_at"] = time.time()
 
     def get(self, path, **kwargs):
         self.clear_request_globals()

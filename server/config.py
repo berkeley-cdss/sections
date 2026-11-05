@@ -87,9 +87,10 @@ def load_config(app: flask.Flask):
         SESSION_COOKIE_HTTPONLY=True,
         SESSION_COOKIE_SECURE=not is_dev,
         SESSION_COOKIE_SAMESITE="Lax",
-        # Flask-Login's year-long remember cookie, which signs a user back in, gets
-        # the same protection; without SameSite, some browsers send it with
-        # another site's form posts.
+        # Sign-ins expire after login.DEFAULT_SIGN_IN_MAX_AGE, and Flask-Login's
+        # remember cookie is no longer set. Any left in browsers are refused
+        # (see login.sign_in_expired), and logging out deletes them; until
+        # then they get the same protection as the session cookie.
         REMEMBER_COOKIE_SECURE=not is_dev,
         REMEMBER_COOKIE_SAMESITE="Lax",
     )
