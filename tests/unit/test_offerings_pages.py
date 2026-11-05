@@ -78,9 +78,13 @@ class OfferingsPagesTests(CourseTestCase):
         self.assertIsNotNone(Offering.query.filter_by(canvas_id=CS61A).one_or_none())
 
         # A course linked from the monorepo: removing it keeps its sections under
-        # "cs61a", and the message says how to link them again.
-        response = self.post(f"/offerings/{CS61A}/remove", follow_redirects=True)
-        self.assertIn(f"flask link-offering {CS61A} cs61a", response.get_data(as_text=True))
+        # "cs61a". Staff are told to ask a maintainer, and the log has the command.
+        with self.assertLogs(self.app.logger, "INFO") as logs:
+            response = self.post(f"/offerings/{CS61A}/remove", follow_redirects=True)
+        page = response.get_data(as_text=True)
+        self.assertIn("Ask a Sections maintainer to restore them.", page)
+        self.assertNotIn("flask", page)
+        self.assertIn(f"flask --app server.main link-offering {CS61A} cs61a ", "\n".join(logs.output))
         self.assertIsNone(Offering.query.filter_by(canvas_id=CS61A).one_or_none())
         self.assertNotIn(f"/offerings/{CS61A}/", self.get("/offerings").get_data(as_text=True))
         self.assertIsNotNone(db.session.get(Section, self.section_id))
