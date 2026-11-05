@@ -63,7 +63,7 @@ def call_api(site, key, method, **body):
             return error.code, json.load(error)
 
 
-def test_admin_makes_uses_and_revokes_an_api_key(site):
+def test_admin_makes_uses_rotates_and_revokes_an_api_key(site):
     site.visit(f"{OFFERING}/admin", TEACHER)
     site.click("API Keys", site.find('//*[@role="tablist"]'))
     site.find('//input[@id="api-key-name"]').send_keys("Attendance sync")
@@ -76,9 +76,19 @@ def test_admin_makes_uses_and_revokes_an_api_key(site):
     status, body = call_api(site, key, "refresh_state")
     assert status == 200 and body["data"]["currentUser"]["isAdmin"] is True
 
+    site.click("Rotate", row)
+    site.wait(lambda: site.find('//input[@aria-label="New API key"]').get_attribute("value") != key)
+    new_key = site.find('//input[@aria-label="New API key"]').get_attribute("value")
+    assert site.has_text("Your new key for “Attendance sync”")
+    row = site.find('//tr[contains(., "Attendance sync")]')
+    assert f"…{new_key[-4:]}" in row.text
+    assert len(site.driver.find_elements(By.XPATH, '//tr[contains(., "Attendance sync")]')) == 1  # old key gone
+    assert call_api(site, key, "refresh_state")[0] == 401
+    assert call_api(site, new_key, "refresh_state")[0] == 200
+
     site.button("Revoke", row).click()  # not site.click, which can't wait behind the confirm dialog
     site.driver.switch_to.alert.accept()
     site.settle()
     site.wait(lambda: site.has_text("No one has an API key for this course."))
-    status, body = call_api(site, key, "refresh_state")
+    status, body = call_api(site, new_key, "refresh_state")
     assert status == 401
