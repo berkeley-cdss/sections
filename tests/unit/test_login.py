@@ -1,10 +1,12 @@
 """Signing in with bCourses: matching people, emails, roles and pronouns."""
 
+import time
 from unittest.mock import patch
 
 from flask import session
+from flask_login.utils import encode_cookie
 
-from server.login import complete_login
+from server.login import DEFAULT_SIGN_IN_MAX_AGE, complete_login
 from server.models import Attendance, AttendanceStatus, Section, Session, User, db
 from tests.unit.support import CS61A, CourseTestCase, DATA8, canvas_course, lab
 
@@ -26,6 +28,8 @@ class LoginTests(CourseTestCase):
                 self.assertEqual(session.get("canvas_access_token"), "access" if is_staff else None)
                 self.assertNotIn("refresh_token", session)
                 self.assertTrue(session.permanent)
+                self.assertAlmostEqual(session["signed_in_at"], time.time(), delta=5)
+                self.assertNotEqual(session.get("_remember"), "set")  # no remember cookie
                 self.assertEqual(session["_user_id"], self.staff.get_id())
                 self.assertEqual(db.session.get(User, self.staff_id).canvas_courses, courses)
         self.authorize()
@@ -165,6 +169,26 @@ class LoginTests(CourseTestCase):
         self.assertIn("Login", self.get("/").get_data(as_text=True))
         self.assertIn("/login/", self.get("/offerings").headers["Location"])
         self.assertEqual(self.api("join_section", target_section_id=str(self.section_id)).status_code, 401)
+
+    def test_sign_ins_expire_so_roles_are_refreshed_from_canvas(self):
+        self.assertEqual(self.api("refresh_state").get_json()["data"]["currentUser"]["id"], self.staff_id)
+        with self.client.session_transaction() as browser:
+            browser["signed_in_at"] = time.time() - DEFAULT_SIGN_IN_MAX_AGE - 60
+        self.assertIsNone(self.api("refresh_state").get_json()["data"]["currentUser"])
+        self.assertEqual(self.api("join_section", target_section_id=str(self.section_id)).status_code, 401)
+        self.assertIn("/login/", self.get("/offerings").headers["Location"])
+
+    def test_sessions_and_remember_cookies_without_a_sign_in_time_are_refused(self):
+        with self.client.session_transaction() as browser:
+            del browser["signed_in_at"]
+        self.assertIsNone(self.api("refresh_state").get_json()["data"]["currentUser"])
+
+        # A remember cookie set before this change, in a browser with no session.
+        with self.client.session_transaction() as browser:
+            browser.clear()
+        with self.app.test_request_context():
+            self.client.set_cookie("remember_token", encode_cookie(self.staff.get_id()))
+        self.assertIsNone(self.api("refresh_state").get_json()["data"]["currentUser"])
 
     def test_sessions_from_before_this_change_are_ignored(self):
         # Older cookies hold a per-course row id or an "account-" id.
