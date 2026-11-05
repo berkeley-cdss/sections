@@ -43,7 +43,8 @@ def create_app(test_config: dict | None = None) -> Flask:
     else:
         app.config.update(test_config)
     db.init_app(app)
-    # Before the other before_request hooks, so a forged post touches nothing.
+    # Before the other before_request hooks, so a forged post reaches no view. (The /offerings/<id>/
+    # blueprint still looks up the offering first: URL preprocessors run before these hooks.)
     refuse_cross_origin_requests(app)
     Migrate(app, db, directory=MIGRATIONS_DIR)
     create_state_client(app)

@@ -40,7 +40,13 @@ class CrossOriginTests(CourseTestCase):
         self.assertIn("came from another website", response.get_json()["message"])
 
     def test_same_origin_posts_work(self):
-        for headers in [{"Sec-Fetch-Site": "same-origin", "Origin": SAME_ORIGIN}, {"Origin": SAME_ORIGIN}]:
+        for headers in [
+            {"Sec-Fetch-Site": "same-origin", "Origin": SAME_ORIGIN},
+            {"Origin": SAME_ORIGIN},  # browsers that don't send Sec-Fetch-Site, e.g. Safari before 16.4
+            # Sec-Fetch-Site decides when it's sent; "none" is a request the user made directly.
+            {"Sec-Fetch-Site": "same-origin", "Origin": "https://evil.example"},
+            {"Sec-Fetch-Site": "none"},
+        ]:
             with self.subTest(headers=headers):
                 response = self.post(f"/offerings/{CS61A}/api/refresh_state", json={}, headers=headers)
                 self.assertTrue(response.get_json()["success"])
@@ -50,6 +56,13 @@ class CrossOriginTests(CourseTestCase):
         self.assertEqual(Offering.query.filter_by(canvas_id=UNSET_UP).count(), 1)
         self.post(f"/offerings/{UNSET_UP}/remove", headers={"Origin": SAME_ORIGIN})
         self.assertEqual(Offering.query.filter_by(canvas_id=UNSET_UP).count(), 0)
+
+    def test_origin_matches_behind_cloud_run(self):
+        # Cloud Run terminates TLS and says so in X-Forwarded-Proto, which ProxyFix trusts, so a
+        # browser without Sec-Fetch-Site sends an https Origin to what Flask sees as an http request.
+        response = self.post(f"/offerings/{CS61A}/api/refresh_state", json={},
+                             headers={"X-Forwarded-Proto": "https", "Origin": "https://localhost"})
+        self.assertTrue(response.get_json()["success"])
 
     def test_requests_without_browser_headers_work(self):
         # Not from a browser, so there's no borrowed cookie; e.g. scripts and the unit tests.
