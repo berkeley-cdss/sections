@@ -117,6 +117,11 @@ export function sectionTitle(section: Section | null | undefined): React.ReactEl
   );
 }
 
+// Matches check_can_edit on the server: a section's TA and the course's admins.
+export function canEditSection(currentUser: PersonDetails | null | undefined, section: Section): boolean {
+  return currentUser?.isAdmin === true || (currentUser != null && section.staff?.id === currentUser.id);
+}
+
 export function getEnrollmentCount(section: Section): number {
   return section.enrollmentCount ?? section.students.length;
 }

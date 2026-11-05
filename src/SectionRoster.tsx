@@ -5,6 +5,7 @@ import { Link, Navigate } from "react-router-dom";
 import styled from "styled-components";
 import AddStudentModal from "./AddStudentModal";
 import Pronouns from "./Pronouns";
+import { canEditSection } from "./models";
 import type { SectionDetails } from "./models";
 import StateContext from "./StateContext";
 import useAPI from "./useStateAPI";
@@ -26,6 +27,7 @@ type Props = {
 
 export default function SectionRoster({ section }: Props) {
   const { currentUser } = useContext(StateContext);
+  const canEdit = canEditSection(currentUser, section);
 
   const deleteSection = useAPI("delete_section");
   const addStudents = useSectionAPI("add_students");
@@ -88,33 +90,37 @@ export default function SectionRoster({ section }: Props) {
                 <Card.Text>
                   <a href={`mailto:${student.email}`}>{student.email}</a>
                 </Card.Text>{" "}
-                <Button
-                  variant="danger"
-                  size="sm"
-                  onClick={() =>
-                    removeStudent({
-                      student: student.email,
-                      section_id: section.id,
-                    }).then(() => refreshState())
-                  }
-                >
-                  Remove
-                </Button>
+                {canEdit && (
+                  <Button
+                    variant="danger"
+                    size="sm"
+                    onClick={() =>
+                      removeStudent({
+                        student: student.email,
+                        section_id: section.id,
+                      }).then(() => refreshState())
+                    }
+                  >
+                    Remove
+                  </Button>
+                )}
               </Card.Body>
             </Card>
           </CardHolder>
         ))}
-        <CardHolder>
-          <Card>
-            <Card.Body>
-              <Card.Title>Add Students</Card.Title>
-              <Card.Text>They will be moved here.</Card.Text>
-              <Button variant="primary" size="sm" onClick={() => setAdding(true)}>
-                Add Students
-              </Button>
-            </Card.Body>
-          </Card>
-        </CardHolder>
+        {canEdit && (
+          <CardHolder>
+            <Card>
+              <Card.Body>
+                <Card.Title>Add Students</Card.Title>
+                <Card.Text>They will be moved here.</Card.Text>
+                <Button variant="primary" size="sm" onClick={() => setAdding(true)}>
+                  Add Students
+                </Button>
+              </Card.Body>
+            </Card>
+          </CardHolder>
+        )}
       </FlexLayout>
       <AddStudentModal
         show={adding}

@@ -82,6 +82,12 @@ def admin_required(func):
     return wrapped
 
 
+def check_can_edit(section: Section) -> None:
+    """Only a section's TA and the course's admins may change it."""
+    if section.staff_id != current_user.id and not current_user.is_admin:
+        raise Failure("Only this section's TA or a course admin can change this section.")
+
+
 def section_sorter(
     section: Section, enrollment_count: int, current_section_ids
 ) -> int:
@@ -512,6 +518,7 @@ def create_state_client(app: flask.Flask):
     def update_section_description(section_id: str, description: str):
         section_id = int(section_id)
         section = Section.query.filter_by(id=section_id, course=get_course()).one()
+        check_can_edit(section)
         check_fits("Your introduction", description, Section.description)
         section.description = description
         db.session.commit()
@@ -522,6 +529,7 @@ def create_state_client(app: flask.Flask):
     def update_section_call_link(section_id: str, call_link: str):
         section_id = int(section_id)
         section = Section.query.filter_by(id=section_id, course=get_course()).one()
+        check_can_edit(section)
         section.call_link = clean_url("The call link", call_link, Section.call_link)
         db.session.commit()
         return refresh_state()
@@ -531,6 +539,7 @@ def create_state_client(app: flask.Flask):
     def update_section_enrollment_code(section_id: str, enrollment_code: str):
         section_id = int(section_id)
         section = Section.query.filter_by(id=section_id, course=get_course()).one()
+        check_can_edit(section)
         check_fits("The enrollment code", enrollment_code, Section.enrollment_code)
         section.enrollment_code = enrollment_code
         db.session.commit()
@@ -617,7 +626,7 @@ def create_state_client(app: flask.Flask):
     @staff_required
     def start_session(section_id: str, start_time: int):
         section_id = int(section_id)
-        Section.query.filter_by(id=section_id, course=get_course()).one()
+        check_can_edit(Section.query.filter_by(id=section_id, course=get_course()).one())
         existing_session = Session.query.filter_by(
             start_time=start_time, section_id=section_id
         ).first()
@@ -637,6 +646,7 @@ def create_state_client(app: flask.Flask):
     def set_attendance(session_id: str, students: str, status: Optional[str]):
         session_id = int(session_id)
         session = Session.query.filter_by(id=session_id, course=get_course()).one()
+        check_can_edit(session.section)
         status = AttendanceStatus[status]
         for email in parse_emails(students):
             student = offering_member(email=email)
@@ -678,6 +688,7 @@ def create_state_client(app: flask.Flask):
         if student is None:
             raise Failure("That student is not enrolled in this course")
         section = Section.query.filter_by(id=section_id, course=get_course()).one()
+        check_can_edit(section)
         student.sections.remove(section)
         db.session.commit()
         return fetch_section(section_id=section_id)
@@ -712,6 +723,7 @@ def create_state_client(app: flask.Flask):
         #this function is never called!! use add_students instead
         section_id = int(section_id)
         section = Section.query.filter_by(id=section_id, course=get_course()).one()
+        check_can_edit(section)
         student = offering_member(email=email)
         if student is None:
             student = find_or_add_person(email, email)
@@ -728,6 +740,7 @@ def create_state_client(app: flask.Flask):
     def add_students(emails: str, section_id: str):
         section_id = int(section_id)
         section = Section.query.filter_by(id=section_id, course=get_course()).one()
+        check_can_edit(section)
         access_token = session.get("canvas_access_token")
         for email in parse_emails(emails):
             student = offering_member(email=email)
