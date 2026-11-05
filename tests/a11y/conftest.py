@@ -5,8 +5,8 @@ from collections import defaultdict
 
 import pytest
 
-from tests.a11y.utils import REPORT_DIR, slugify
-from tests.browser import live_site
+from tests.a11y.utils import REPORT_DIR
+from tests.browser import live_site, slugify
 
 # rule id -> pages that break it, printed at the end of the run
 VIOLATIONS_BY_RULE = defaultdict(set)

@@ -8,8 +8,7 @@ from pathlib import Path
 import pytest
 
 from server.models import db
-from tests.a11y.utils import slugify
-from tests.browser import live_site
+from tests.browser import live_site, slugify
 
 SCREENSHOTS = Path("e2e-screenshots")
 

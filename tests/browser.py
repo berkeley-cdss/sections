@@ -2,6 +2,7 @@
 tests (tests/e2e) share. Everyone signs in through /dev_login/ against the fake Canvas
 (server/fake_canvas.py)."""
 
+import re
 import tempfile
 import threading
 from contextlib import contextmanager
@@ -42,6 +43,11 @@ LOADED = """
 return document.readyState === 'complete' && window.pendingFetches === 0
   && !document.querySelector('.spinner-border');
 """
+
+
+def slugify(text):
+    """text as a file name, for reports and screenshots."""
+    return re.sub(r"[^\w.-]+", "-", text).strip("-")
 
 
 class Site:
