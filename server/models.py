@@ -555,6 +555,24 @@ class ApiKey(db.Model):
         }
 
 
+class CanvasToken(db.Model):
+    """A staff member's Canvas access token for one signed-in browser, used to
+    look students up in bCourses (see canvas_tokens.py).
+
+    Kept here rather than in the session cookie, which Flask signs but doesn't
+    encrypt. The cookie holds only a random handle, stored here as a hash, so
+    deleting the row cuts off every copy of the cookie at once."""
+
+    __tablename__ = "canvas_tokens"
+    id: int = db.Column(db.Integer, primary_key=True)
+    user_id: int = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False, index=True)
+    # Hex SHA-256 of the handle in the session cookie.
+    handle_hash: str = db.Column(db.String(64), nullable=False, unique=True, index=True)
+    access_token: str = db.Column(db.Text, nullable=False)
+    # Unix seconds, from the token's expires_in.
+    expires_at: int = db.Column(db.Integer, nullable=False)
+
+
 class Failure(Exception):
     pass
 

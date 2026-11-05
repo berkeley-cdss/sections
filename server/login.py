@@ -9,6 +9,7 @@ from markupsafe import escape
 from werkzeug.exceptions import HTTPException
 
 from server import canvas_service
+from server.canvas_tokens import LEGACY_SESSION_KEYS, discard_token, store_token
 from server.errors import error_page, report_unexpected
 from server.offering import current_offering, in_offering
 from server.models import User, db, with_email
@@ -78,13 +79,12 @@ def complete_login(token: dict):
     login_user(user)
     session.permanent = True
     session[SIGNED_IN_AT_KEY] = time.time()
-    # Keep only a short-lived access token, and only for staff, who need it to
-    # look up students; reauthorize when it expires.
-    session.pop("canvas_access_token", None)
-    session.pop("canvas_token_expires_at", None)
+    # Keep the short-lived access token, on the server, only for staff, who
+    # need it to look up students; they sign in again when it expires. Any
+    # token from this browser's previous sign-in is revoked.
+    discard_token()
     if user.is_global_admin or any(c["is_staff"] for c in courses.values()):
-        session["canvas_access_token"] = access_token
-        session["canvas_token_expires_at"] = time.time() + token.get("expires_in", 3600)
+        store_token(user, access_token, token.get("expires_in", 3600))
 
 
 def finish_login(token: dict):
@@ -175,10 +175,15 @@ def create_login_client(app: flask.Flask):
             return f"Access denied: {escape(e.description or e.error or 'unknown error')}", 403
         return finish_login(token)
 
+    @app.before_request
+    def drop_token_from_cookie():
+        # Canvas tokens used to be kept in the session cookie itself.
+        for key in LEGACY_SESSION_KEYS:
+            session.pop(key, None)
+
     @app.route("/logout/")
     def logout():
         session.pop(SIGNED_IN_AT_KEY, None)
-        session.pop("canvas_access_token", None)
-        session.pop("canvas_token_expires_at", None)
+        discard_token()
         logout_user()
         return redirect(url_for("index"))

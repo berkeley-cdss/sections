@@ -10,7 +10,7 @@ from flask import Flask
 from server import canvas_service
 from server.config import load_config
 from server.dev_login import mock_user_roster
-from server.models import Offering, User, db
+from server.models import CanvasToken, Offering, User, db
 from server.offering import load_offering
 from tests.unit.support import AppTestCase, lab
 
@@ -126,8 +126,9 @@ class DevLoginTests(AppTestCase):
         self.assertEqual(set(user.canvas_courses), {str(CS169A), "4567890"})
         with self.client.session_transaction() as browser:
             self.assertEqual(browser["_user_id"], user.get_id())
-            # a TA, so keeps the token to look up students
-            self.assertEqual(browser["canvas_access_token"], "dev_access_token")
+            # a TA, so keeps the token to look up students, on the server
+            self.assertNotIn("canvas_access_token", browser)
+            self.assertEqual(CanvasToken.query.filter_by(user_id=user.id).one().access_token, "dev_access_token")
 
     def test_staff_can_set_up_a_course_and_add_students_from_the_fake_canvas(self):
         self.dev_login(OSKI)

@@ -10,7 +10,8 @@ from flask import g
 from server.application import create_app
 from server.import_sheet import import_sections
 from server.login import complete_login
-from server.models import Offering, Section, User, db
+from server.canvas_tokens import _hash as hash_handle
+from server.models import CanvasToken, Offering, Section, User, db
 
 TEST_CONFIG = {
     "SECRET_KEY": "test",
@@ -118,10 +119,13 @@ class CourseTestCase(AppTestCase):
         self.assertEqual(response.status_code, 200)
         return response.get_json()
 
-    def authorize(self, expires_in=3600):
+    def authorize(self, expires_in=3600, handle="handle", user_id=None):
+        """Give the signed-in staff member's browser a Canvas token, "access"."""
+        db.session.add(CanvasToken(user_id=user_id or self.staff_id, handle_hash=hash_handle(handle),
+                                   access_token="access", expires_at=int(time.time() + expires_in)))
+        db.session.commit()
         with self.client.session_transaction() as browser:
-            browser["canvas_access_token"] = "access"
-            browser["canvas_token_expires_at"] = time.time() + expires_in
+            browser["canvas_token_id"] = handle
 
     def enroll_known_in_data8(self):
         """Make "known" a student in DATA 8 too, enrolled in its lab."""

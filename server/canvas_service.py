@@ -1,3 +1,4 @@
+import requests
 from canvasapi import Canvas
 from flask import current_app
 
@@ -28,6 +29,20 @@ def _client(access_token: str) -> Canvas | FakeCanvas:
     if is_mock_canvas():
         return FakeCanvas()
     return Canvas(current_app.config["CANVAS_SERVER_URL"], access_token)
+
+
+def revoke_token(access_token: str):
+    """Ask Canvas to revoke an access token, so it stops working before it
+    expires. Best effort: signing out mustn't fail because Canvas is down, and
+    the token expires within an hour regardless."""
+    if is_mock_canvas():
+        return
+    try:
+        response = requests.delete(current_app.config["CANVAS_SERVER_URL"] + "login/oauth2/token",
+                                   headers={"Authorization": f"Bearer {access_token}"}, timeout=5)
+        response.raise_for_status()
+    except requests.RequestException as error:
+        current_app.logger.warning("Couldn't revoke a Canvas access token: %s", error)
 
 
 def get_profile(user_id, access_token: str) -> dict:

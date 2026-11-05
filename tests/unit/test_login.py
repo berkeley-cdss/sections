@@ -6,16 +6,17 @@ from unittest.mock import patch
 from flask import session
 from flask_login.utils import encode_cookie
 
+from server.canvas_tokens import current_token
 from server.login import DEFAULT_SIGN_IN_MAX_AGE, complete_login
 from server.models import Attendance, AttendanceStatus, Section, Session, User, db
 from tests.unit.support import CS61A, CourseTestCase, DATA8, canvas_course, lab
 
 
 class LoginTests(CourseTestCase):
-    def test_login_retains_only_staff_access_token_and_logout_clears_it(self):
+    def test_login_keeps_only_staff_access_tokens_on_the_server(self):
         for is_staff in (True, False):
             with self.subTest(is_staff=is_staff), self.app.test_request_context():
-                session["canvas_access_token"] = "previous"
+                session["canvas_access_token"] = "previous"  # where tokens used to be kept
                 session["canvas_token_expires_at"] = 123
                 courses = {str(CS61A): canvas_course("CS 61A", staff=is_staff, student=not is_staff)}
                 with patch("server.login.canvas_service.get_profile",
@@ -25,18 +26,19 @@ class LoginTests(CourseTestCase):
                         "user": {"id": 1}, "access_token": "access",
                         "refresh_token": "must-not-be-stored", "expires_in": 3600,
                     })
-                self.assertEqual(session.get("canvas_access_token"), "access" if is_staff else None)
+                staff = db.session.get(User, self.staff_id)
+                # The cookie holds a handle, never the token.
+                self.assertNotIn("access", [value for value in session.values() if isinstance(value, str)])
+                self.assertNotIn("canvas_access_token", session)
+                self.assertNotIn("canvas_token_expires_at", session)
+                self.assertEqual(current_token(staff), "access" if is_staff else None)
+                self.assertEqual("canvas_token_id" in session, is_staff)
                 self.assertNotIn("refresh_token", session)
                 self.assertTrue(session.permanent)
                 self.assertAlmostEqual(session["signed_in_at"], time.time(), delta=5)
                 self.assertNotEqual(session.get("_remember"), "set")  # no remember cookie
                 self.assertEqual(session["_user_id"], self.staff.get_id())
                 self.assertEqual(db.session.get(User, self.staff_id).canvas_courses, courses)
-        self.authorize()
-        self.get("/logout/")
-        with self.client.session_transaction() as browser:
-            self.assertNotIn("canvas_access_token", browser)
-            self.assertNotIn("canvas_token_expires_at", browser)
 
     def test_first_login_claims_the_imported_person_with_that_email(self):
         imported = User(email="tutor@test", name="Imported Name")
@@ -127,7 +129,7 @@ class LoginTests(CourseTestCase):
              patch("server.login.canvas_service.get_user_courses",
                    return_value={"999": canvas_course("Override", student=True)}):
             complete_login({"user": {"id": 9}, "access_token": "access"})
-            self.assertIsNotNone(session.get("canvas_access_token"))
+            self.assertIsNotNone(current_token(User.query.filter_by(canvas_id="9").one()))
         boss = User.query.filter_by(canvas_id="9").one()
         self.assertTrue(boss.is_global_admin)
         self.sign_in(boss)
