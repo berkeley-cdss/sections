@@ -13,12 +13,13 @@ from zoneinfo import ZoneInfo
 from server.import_sheet import parse_section_times
 
 import flask
-from flask import Blueprint, abort, g, jsonify, render_template, request, current_app, session
+from flask import Blueprint, abort, g, jsonify, render_template, request, current_app
 from flask_login import current_user, login_required
 from sqlalchemy import func
 from sqlalchemy.orm import joinedload, noload
 
 from server import canvas_service
+from server.canvas_tokens import current_token
 from server.api_keys import audit_log, authenticate, create_key, init_api_keys, record_use, using_api_key
 from server.login import sync_offering_role
 from server.offering import OFFERING_URL_PREFIX, get_canvas_course_id, get_course, get_course_name, load_offering
@@ -741,14 +742,14 @@ def create_state_client(app: flask.Flask):
         section_id = int(section_id)
         section = Section.query.filter_by(id=section_id, course=get_course()).one()
         check_can_edit(section)
-        access_token = session.get("canvas_access_token")
+        access_token = current_token(current_user)
         for email in parse_emails(emails):
             student = offering_member(email=email)
             if student is not None and student.is_staff:
                 raise Failure("Attempted to add staff: {student.name}")
             if student is None:
                 # Existing students need no Canvas token; unknown students need a fresh login.
-                if not access_token or time.time() + 60 >= session.get("canvas_token_expires_at", 0):
+                if access_token is None:
                     raise Failure(
                         "Canvas authorization has expired. Please log out and sign in "
                         "with Canvas again, then retry adding students."
