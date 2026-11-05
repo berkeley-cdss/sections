@@ -1,4 +1,5 @@
 import { useContext, useState } from "react";
+import Alert from "react-bootstrap/Alert";
 import Button from "react-bootstrap/Button";
 import AddSessionModal from "./AddSessionModal";
 
@@ -17,12 +18,20 @@ export default function SectionAttendance({ section }: Props) {
 
   if (!canEditSection(currentUser, section)) {
     // Past sessions, read-only; there's nothing to start or add.
-    return section.sessions
-      .slice()
-      .reverse()
-      .map((session) => (
-        <SessionAttendance key={session.startTime} session={session} section={section} />
-      ));
+    return (
+      <>
+        <br />
+        <Alert variant="info" className="mb-0">
+          You are not the TA assigned to this section, so you cannot log attendance.
+        </Alert>
+        {section.sessions
+          .slice()
+          .reverse()
+          .map((session) => (
+            <SessionAttendance key={session.startTime} session={session} section={section} />
+          ))}
+      </>
+    );
   }
 
   return (
