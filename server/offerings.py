@@ -2,7 +2,7 @@
 
 import click
 import flask
-from flask import Blueprint, abort, flash, redirect, render_template, request, url_for
+from flask import Blueprint, abort, current_app, flash, redirect, render_template, request, url_for
 from flask_login import current_user, login_required
 
 from server.models import Offering, db
@@ -110,10 +110,15 @@ def create_offering_pages(app: flask.Flask):
             flash(f"Removed {display_name}. Its sections and attendance are kept; "
                   "import it again to restore them.", "success")
         else:
-            # Linked from the monorepo: importing would start over under a new key.
+            # Linked from the monorepo: importing would start over under a new key, and
+            # linking it again is a command only a maintainer can run, so the
+            # command goes in the log for them.
             flash(f"Removed {display_name}. Its sections and attendance are kept under "
-                  f"'{key}'; to restore them, run: flask link-offering {canvas_id} {key} \"{name}\"",
-                  "success")
+                  f"'{key}'. Ask a Sections maintainer to restore them.", "success")
+            current_app.logger.info(
+                "%s removed offering %s (key %s); to restore it, run from the repository root: "
+                "flask --app server.main link-offering %s %s \"%s\"",
+                current_user.email, canvas_id, key, canvas_id, key, name)
         return redirect(url_for("offerings"))
 
     @app.cli.command("link-offering")
