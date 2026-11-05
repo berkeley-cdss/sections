@@ -4,6 +4,8 @@ import re
 import flask
 from dotenv import load_dotenv
 
+from server.api_keys import DEFAULT_ROLE_MAX_AGE
+
 DEV_SQLITE_PATH = os.path.join(os.path.abspath(os.path.dirname(__file__)), "app.db")
 
 
@@ -81,8 +83,8 @@ def load_config(app: flask.Flask):
         ADMIN_OVERRIDE_CANVAS_COURSE_ID=int(admin_override) if admin_override else None,
         # Shown to staff as the account to share import spreadsheets with.
         GOOGLE_SERVICE_ACCOUNT_EMAIL=os.getenv("GOOGLE_SERVICE_ACCOUNT_EMAIL"),
-        # Shared secret for the /api/sudo/* and export_attendance_secret endpoints.
-        API_SECRET=os.getenv("API_SECRET"),
+        # How long an API key keeps working after its owner's last sign-in (api_keys.py).
+        API_KEY_ROLE_MAX_AGE=int(os.getenv("API_KEY_ROLE_MAX_AGE") or DEFAULT_ROLE_MAX_AGE),
         PERMANENT_SESSION_LIFETIME=7200,
         SESSION_COOKIE_HTTPONLY=True,
         SESSION_COOKIE_SECURE=not is_dev,

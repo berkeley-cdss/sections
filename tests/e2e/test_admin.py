@@ -1,5 +1,9 @@
 """A course admin changing the course's settings, and what students see as a result."""
 
+import json
+import urllib.error
+import urllib.request
+
 from selenium.webdriver.common.by import By
 
 from server.models import CourseConfig
@@ -45,3 +49,36 @@ def test_students_cannot_open_the_admin_page(site):
     driver = site.visit(f"{OFFERING}/admin", STUDENT)
     site.wait(lambda: driver.current_url.rstrip("/") == f"{site.base_url}{OFFERING}")
     assert not site.has_text("Admin Settings")
+
+
+def call_api(site, key, method, **body):
+    request = urllib.request.Request(
+        f"{site.base_url}{OFFERING}/api/sudo/{method}", data=json.dumps(body).encode(), method="POST",
+        headers={"Content-Type": "application/json", "Authorization": f"Bearer {key}"})
+    try:
+        with urllib.request.urlopen(request) as response:
+            return response.status, json.load(response)
+    except urllib.error.HTTPError as error:
+        with error:
+            return error.code, json.load(error)
+
+
+def test_admin_makes_uses_and_revokes_an_api_key(site):
+    site.visit(f"{OFFERING}/admin", TEACHER)
+    site.click("API Keys", site.find('//*[@role="tablist"]'))
+    site.find('//input[@id="api-key-name"]').send_keys("Attendance sync")
+    site.click("Create key")
+    key = site.find('//input[@aria-label="New API key"]').get_attribute("value")
+    assert key.startswith("sections_")
+    row = site.find('//tr[contains(., "Attendance sync")]')
+    assert f"…{key[-4:]}" in row.text and "You" in row.text
+
+    status, body = call_api(site, key, "refresh_state")
+    assert status == 200 and body["data"]["currentUser"]["isAdmin"] is True
+
+    site.button("Revoke", row).click()  # not site.click, which can't wait behind the confirm dialog
+    site.driver.switch_to.alert.accept()
+    site.settle()
+    site.wait(lambda: site.has_text("No one has an API key for this course."))
+    status, body = call_api(site, key, "refresh_state")
+    assert status == 401

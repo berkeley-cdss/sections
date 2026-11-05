@@ -233,6 +233,10 @@ class User(db.Model, UserMixin):
     # Active Canvas courses at last login, keyed by str(canvas course id):
     # {"name", "code", "start_at", "is_staff", "is_admin", "is_student"}.
     canvas_courses: dict = db.Column(db.JSON, nullable=False, default=dict)
+    # When canvas_courses (and is_global_admin) were last read from Canvas, in
+    # Unix seconds; None if never. API keys stop working once this gets old,
+    # since a role lost in bCourses only shows up here at the next sign-in.
+    canvas_synced_at: int = db.Column(db.Integer, nullable=True)
     staff_offerings: set = db.Column(StringSet, nullable=False, default=set)
     admin_offerings: set = db.Column(StringSet, nullable=False, default=set)
     student_offerings: set = db.Column(StringSet, nullable=False, default=set)
@@ -514,6 +518,41 @@ class Offering(db.Model):
 
     def __repr__(self):
         return f"<Offering {self.name}>"
+
+
+class ApiKey(db.Model):
+    """A course admin's key for one offering's API at
+    /offerings/<canvas course id>/api/sudo/<name> (see api_keys.py).
+
+    It works only in its own offering, and only while its owner is an admin
+    there. Only a hash of the key is stored; the key is shown once, when made."""
+
+    __tablename__ = "api_keys"
+    id: int = db.Column(db.Integer, primary_key=True)
+    course: str = db.Column(db.String(255), nullable=False, index=True)
+    owner_id: int = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False, index=True)
+    owner: "User" = db.relationship("User", lazy="joined")
+    name: str = db.Column(db.String(255), nullable=False)
+    # Hex SHA-256 of the key. Keys are random, so a plain hash is enough.
+    key_hash: str = db.Column(db.String(64), nullable=False, unique=True, index=True)
+    # The key's last few characters, to tell keys apart in the list.
+    hint: str = db.Column(db.String(8), nullable=False)
+    # Unix seconds.
+    created_at: int = db.Column(db.Integer, nullable=False)
+    last_used_at: int = db.Column(db.Integer, nullable=True)
+    revoked_at: int = db.Column(db.Integer, nullable=True)
+
+    @property
+    def json(self):
+        return {
+            "id": self.id,
+            "name": self.name,
+            "hint": self.hint,
+            "owner": {"name": self.owner.name, "email": self.owner.email},
+            "isMine": self.owner_id == current_user.id,
+            "createdAt": self.created_at,
+            "lastUsedAt": self.last_used_at,
+        }
 
 
 class Failure(Exception):

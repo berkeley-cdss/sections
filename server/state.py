@@ -1,5 +1,4 @@
 import csv
-import hmac
 import re
 import time
 from canvasapi.exceptions import InvalidAccessToken, Unauthorized
@@ -20,10 +19,13 @@ from sqlalchemy import func
 from sqlalchemy.orm import joinedload, noload
 
 from server import canvas_service
+from server.api_keys import audit_log, authenticate, create_key, init_api_keys, record_use, using_api_key
+from server.login import sync_offering_role
 from server.offering import OFFERING_URL_PREFIX, get_canvas_course_id, get_course, get_course_name, load_offering
 from server.import_sheet import check_capacity, import_sections_from_url, import_enrollment_from_url, parse_capacity
 
 from server.models import (
+    ApiKey,
     Attendance,
     AttendanceStatus,
     CourseConfig,
@@ -52,6 +54,18 @@ def staff_required(func):
     def wrapped(**kwargs):
         if not current_user.is_staff:
             raise Failure("Only staff can perform this action")
+        return func(**kwargs)
+
+    return wrapped
+
+
+def session_only(func):
+    """Refuse requests made with an API key, e.g. so a leaked key can't make
+    more keys that outlive revoking it."""
+    @wraps(func)
+    def wrapped(**kwargs):
+        if using_api_key():
+            raise Failure("This can't be done with an API key. Sign in to Sections instead.")
         return func(**kwargs)
 
     return wrapped
@@ -122,11 +136,6 @@ def clean_url(label: str, value, column) -> str | None:
     return value
 
 
-def is_valid_api_secret(secret) -> bool:
-    expected = current_app.config.get("API_SECRET")
-    return bool(expected) and isinstance(secret, str) and hmac.compare_digest(secret, expected)
-
-
 def can_teach_here(user: User) -> bool:
     """Whether ``user`` can be assigned a section in this offering.
 
@@ -159,6 +168,7 @@ def add_student_helper(student: User, target_section: Section):
 def create_state_client(app: flask.Flask):
     # Every offering page and API lives under /offerings/<canvas course id>/.
     bp = Blueprint("offering", __name__, url_prefix=OFFERING_URL_PREFIX)
+    init_api_keys(app)
 
     @bp.url_value_preprocessor
     def pull_course(endpoint, values):
@@ -185,19 +195,24 @@ def create_state_client(app: flask.Flask):
         )
 
         def sudo_wrapped():
-            data = request.json
-            secret = data["secret"]
-            email = data["email"]
-            args = data["args"]
+            api_key = authenticate()
+            data = request.get_json(silent=True)
+            if not isinstance(data, dict):
+                abort(400, 'Send a JSON object: {"email": ..., "args": {...}}.')
+            email, args = data.get("email"), data.get("args", {})
+            if not isinstance(args, dict) or not (email is None or isinstance(email, str)):
+                abort(400, '"args" must be an object, and "email" the email of a course member.')
 
-            if not is_valid_api_secret(secret):
-                abort(401)
-
-            user = offering_member(email=email)
+            # The key's owner is an admin here (authenticate checked), so they
+            # can act as anyone in this course, and no one outside it.
+            sync_offering_role(api_key.owner)
+            user = api_key.owner if email is None else offering_member(email=email)
             if user is None:
-                abort(404)
+                abort(404, f"{email} isn't a member of this course.")
             # Act as this user for this request only, without touching the session.
             g._login_user = user
+            g.api_key = api_key
+            record_use(api_key, user, handler.__name__)
             try:
                 return jsonify({"success": True, "data": handler(**args)})
             except Failure as failure:
@@ -764,12 +779,6 @@ def create_state_client(app: flask.Flask):
     def export_attendance():
         return export_helper()
 
-    @api
-    def export_attendance_secret(secret: str):
-        if is_valid_api_secret(secret):
-            return export_helper()
-        raise Failure("Invalid secret")
-
     def export_helper():
         stringify = dumps
         attendances = dict()
@@ -811,6 +820,61 @@ def create_state_client(app: flask.Flask):
                 ),
             },
         }
+
+    def api_keys_json():
+        keys = ApiKey.query.filter_by(course=get_course(), revoked_at=None).order_by(ApiKey.created_at)
+        return [api_key.json for api_key in keys]
+
+    def find_api_key(key_id) -> ApiKey:
+        api_key = ApiKey.query.filter_by(id=int(key_id), course=get_course(), revoked_at=None).one_or_none()
+        if api_key is None:
+            raise Failure("That API key doesn't exist or was already revoked.")
+        return api_key
+
+    @api
+    @admin_required
+    @session_only
+    def list_api_keys():
+        return api_keys_json()
+
+    @api
+    @admin_required
+    @session_only
+    def create_api_key(name: str):
+        name = name.strip() if isinstance(name, str) else ""
+        if not name:
+            raise Failure("Give the key a name, e.g. what it's for.")
+        check_fits("The key's name", name, ApiKey.name)
+        _, key = create_key(current_user, name)
+        db.session.commit()
+        return {"key": key, "name": name, "keys": api_keys_json()}
+
+    @api
+    @admin_required
+    @session_only
+    def revoke_api_key(key_id: str):
+        # Any admin may revoke any key in the course, e.g. a departed TA's.
+        api_key = find_api_key(key_id)
+        api_key.revoked_at = int(time.time())
+        db.session.commit()
+        audit_log.info("key %d (%r, owner %s) in %s revoked by %s", api_key.id, api_key.name,
+                       api_key.owner.email, api_key.course, current_user.email)
+        return api_keys_json()
+
+    @api
+    @admin_required
+    @session_only
+    def rotate_api_key(key_id: str):
+        """Replace one of your keys with a new one with the same name."""
+        old = find_api_key(key_id)
+        if old.owner_id != current_user.id:
+            raise Failure("You can only rotate your own API keys. Revoke this one instead.")
+        old.revoked_at = int(time.time())
+        new, key = create_key(current_user, old.name)
+        db.session.commit()
+        audit_log.info("key %d (%r, owner %s) in %s rotated to key %d", old.id, old.name,
+                       current_user.email, old.course, new.id)
+        return {"key": key, "name": new.name, "keys": api_keys_json()}
 
     @api
     @admin_required

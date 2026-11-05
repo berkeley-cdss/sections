@@ -70,6 +70,7 @@ def complete_login(token: dict):
     user.pronouns = profile.get("pronouns") or None
     user.canvas_courses = courses
     user.is_global_admin = override_id is not None and str(override_id) in courses
+    user.canvas_synced_at = int(time.time())
     db.session.commit()
 
     # No remember cookie: it holds no time, so it would sign the user back in
