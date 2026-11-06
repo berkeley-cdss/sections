@@ -6,7 +6,7 @@ from flask import g
 
 from server.import_sheet import import_enrollment, import_sections, parse_time_string
 from server.models import Failure, Offering, Section, User, db
-from tests.unit.support import CS61A, CourseTestCase
+from tests.unit.support import CS61A, DATA8, CourseTestCase, canvas_course
 
 
 class SheetImportsTests(CourseTestCase):
@@ -113,3 +113,69 @@ class SheetImportsTests(CourseTestCase):
                 ["staff@test", "Staff", "30", "Room A", "M", "10:00a", "11:00a", "", "TRUE", "Lab"],
                 ["staff@test", "Staff", "30", "Room B", "M", "10:00a", "09:00a", "", "TRUE", "Lab"])
         self.assertEqual(Section.query.filter_by(location="Room A").count(), 0)
+
+
+class SheetImportStaffTests(CourseTestCase):
+    """Imports only make course staff a section's TA."""
+
+    def lab_row(self, email, name="Someone", location="Room Z"):
+        return [email, name, "30", location, "M", "10:00a", "11:00a", "", "TRUE", "Lab"]
+
+    def add_user(self, email, *, canvas_courses=None, staff_in=(), student_in=()):
+        user = User(email=email, name=email, canvas_id=email if canvas_courses is not None else None,
+                    canvas_courses=canvas_courses)
+        for key in staff_in:
+            user.set_role(key, is_staff=True)
+        for key in student_in:
+            user.set_role(key, is_staff=False)
+        db.session.add(user)
+        db.session.commit()
+        return user.id
+
+    def assert_refused(self, email, row_number=2):
+        with self.assertRaisesRegex(Failure, f"^Row {row_number}: {email} isn't on staff in this course."):
+            self.import_cs61a_sections(self.lab_row("staff@test", location="Room Y"), self.lab_row(email))
+        db.session.remove()
+        self.assertEqual(Section.query.filter(Section.location.in_(["Room Y", "Room Z"])).count(), 0)
+
+    def test_students_are_refused(self):
+        self.assert_refused("known@test", row_number=3)  # a student in Canvas
+        # Imported as a student, and hasn't signed in.
+        self.add_user("imported@test", student_in=["cs61a"])
+        self.assert_refused("imported@test", row_number=3)
+
+    def test_people_not_on_staff_here_in_canvas_are_refused(self):
+        # Signed in for DATA 8, where they're on staff, but not in CS 61A.
+        self.add_user("data8@test", canvas_courses={str(DATA8): canvas_course("DATA 8", staff=True)},
+                      staff_in=[str(DATA8)])
+        self.assert_refused("data8@test", row_number=3)
+        # Staff here in Sections, but no longer in Canvas.
+        self.add_user("former@test", canvas_courses={str(CS61A): canvas_course("CS 61A", student=True)},
+                      staff_in=["cs61a"])
+        self.assert_refused("former@test", row_number=3)
+
+    def test_staff_in_canvas_who_have_not_opened_the_course_become_staff(self):
+        user_id = self.add_user("new-ta@test", canvas_courses={str(CS61A): canvas_course("CS 61A", staff=True)})
+        self.assertEqual(self.import_cs61a_sections(self.lab_row("new-ta@test")), (1, 0))
+        user = db.session.get(User, user_id)
+        self.assertIn("cs61a", user.staff_offerings)
+        self.assertNotIn("cs61a", user.admin_offerings)
+        self.assertEqual(Section.query.filter_by(location="Room Z").one().staff_id, user_id)
+
+    def test_emails_nobody_has_signed_in_with_become_staff(self):
+        # A new email, and one imported for another course.
+        other_id = self.add_user("other-course@test", staff_in=[str(DATA8)])
+        self.assertEqual(self.import_cs61a_sections(
+            self.lab_row("brand-new@test"), self.lab_row("other-course@test", location="Room Y")), (2, 0))
+        for email in ("brand-new@test", "other-course@test"):
+            self.assertIn("cs61a", User.query.filter_by(email=email).one().staff_offerings)
+        self.assertIn(str(DATA8), db.session.get(User, other_id).staff_offerings)
+
+    def test_enrollment_staff_email_must_be_on_staff(self):
+        with self.app.test_request_context():
+            g.offering = Offering.query.filter_by(canvas_id=CS61A).one()
+            with self.assertRaisesRegex(Failure, "^Row 2: known@test isn't on staff in this course."):
+                import_enrollment(iter([
+                    ["Student Email", "Student Name", "Staff Email", "Location", "Day", "Start", "Type"],
+                    ["new-student@test", "New", "known@test", "Room", "M", "10:00a", "Lab"],
+                ]))

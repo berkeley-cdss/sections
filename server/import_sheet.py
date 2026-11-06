@@ -6,10 +6,10 @@ from typing import List, Iterator
 
 from zoneinfo import ZoneInfo
 
-from server.offering import get_course
+from server.offering import add_staff_role, can_teach_here, get_course
 from server.google_sheets import read_spreadsheet
 from dataclasses import asdict, dataclass, field, fields
-from server.models import Failure, Section, check_fits, db, find_or_add_person, offering_member, user_section
+from server.models import Failure, Section, User, check_fits, db, find_or_add_person, offering_member, user_section, with_email
 
 # Sample Spreadsheet Link: https://docs.google.com/spreadsheets/d/1WL7gXiBxPe6aUFBKfEOVS6iY27ITy9mARupLoJX-ouE/edit?usp=sharing
 pst = ZoneInfo("US/Pacific")
@@ -47,6 +47,21 @@ def parse_time_string(day, time, label="Time"):
         second=sec,
         tzinfo=pst
     ).timestamp())
+
+
+def section_staff(email: str, name: str, row_number: int) -> User:
+    """The staff member a row of the Sections sheet assigns its section to."""
+    user = with_email(email)
+    if user is None or (user.canvas_id is None and not user.is_member_of(get_course())):
+        # Nobody has signed in with this email, and it isn't in this course, so
+        # there's no role to check: take the sheet's word for it.
+        user = find_or_add_person(email, name)
+        user.set_role(get_course(), is_staff=True)
+        return user
+    if not can_teach_here(user):
+        raise Failure(f"Row {row_number}: {email} isn't on staff in this course.")
+    add_staff_role(user)
+    return user
 
 
 def parse_section_times(day, start, end):
@@ -177,10 +192,7 @@ def import_sections(data: Iterator):
             raise Failure(f"Unknown boolean value: {can_self_enroll}")
         can_self_enroll = can_self_enroll == "true"
 
-        staff = offering_member(email=email)
-        if staff is None:
-            staff = find_or_add_person(email, name)
-            staff.set_role(get_course(), is_staff=True)
+        staff = section_staff(email, name, row_number)
 
         candidates = [s for s in existing.get(key, []) if s.id not in matched]
         if len(existing.get(key, [])) > 1 or rows_per_key[key] > 1:
@@ -253,8 +265,8 @@ def import_enrollment(data: Iterator):
             student.set_role(get_course(), is_staff=False)
 
         staff = offering_member(email=staff_email)
-        if staff is None:
-            raise Failure(f"Unable to import enrollment data for {student_email}! {staff_email} isn't on staff.")
+        if staff is None or not can_teach_here(staff):
+            raise Failure(f"Row {row_number}: {staff_email} isn't on staff in this course.")
 
         # Assumes that each section can be uniquely identified by the below parameters
         section = Section.query.filter_by(
