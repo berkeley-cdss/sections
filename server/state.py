@@ -22,9 +22,8 @@ from server import canvas_service
 from server.canvas_tokens import current_token
 from server.api_keys import audit_log, authenticate, create_key, init_api_keys, record_use, using_api_key
 from server.login import sync_offering_role
-from server.offering import (
-    OFFERING_URL_PREFIX, add_staff_role, can_teach_here, get_canvas_course_id, get_course, get_course_name, load_offering,
-)
+from server.course_staff import add_staff_role, can_teach_here
+from server.offering import OFFERING_URL_PREFIX, get_canvas_course_id, get_course, get_course_name, load_offering
 from server.import_sheet import check_capacity, import_sections_from_url, import_enrollment_from_url, parse_capacity
 
 from server.models import (

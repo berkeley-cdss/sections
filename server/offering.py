@@ -6,7 +6,7 @@ load_offering resolves that ID to an Offering row for the rest of the request.
 
 from flask import abort, g
 
-from server.models import Offering, User
+from server.models import Offering
 
 # Matches seating's offering URLs.
 OFFERING_URL_PREFIX = "/offerings/<int:canvas_course_id>"
@@ -38,26 +38,3 @@ def get_course() -> str:
 
 def get_course_name() -> str:
     return g.offering.display_name
-
-
-def can_teach_here(user: User) -> bool:
-    """Whether ``user`` can be assigned a section in this offering.
-
-    Their role in an offering is only brought up to date with Canvas when they
-    open its pages, so for anyone who has signed in, go by their Canvas roles
-    from their last sign-in instead. People imported from a spreadsheet who
-    haven't signed in only have their role here. Global admins count only
-    where they're on staff in Canvas, not in every offering."""
-    if user.canvas_id is not None:
-        roles = user.canvas_roles_in(get_canvas_course_id())
-        return roles is not None and roles[0]
-    return get_course() in user.staff_offerings
-
-
-def add_staff_role(user: User):
-    """Make someone can_teach_here allows staff here, if they aren't yet: they're
-    on staff in Canvas, but haven't opened this course here since."""
-    if get_course() in user.staff_offerings:
-        return
-    roles = user.canvas_roles_in(get_canvas_course_id()) if user.canvas_id is not None else None
-    user.set_role(get_course(), is_staff=True, is_admin=roles is not None and roles[1])
