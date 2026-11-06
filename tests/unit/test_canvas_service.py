@@ -31,9 +31,9 @@ class CourseStaffLookupTests(CourseTestCase):
             staff = canvas_service.get_course_staff("token")
         self.assertEqual(staff, {"1": False, "2": True, "3": True, "4": True})
         client.return_value.get_course.assert_called_once_with(CS61A)
-        # Only active enrollments, as at sign-in, and a page size that fits most courses' staff.
-        get_enrollments.assert_called_once_with(type=["TaEnrollment", "TeacherEnrollment"], state=["active"],
-                                                per_page=100)
+        # Invited staff too, and a page size that fits most courses' staff.
+        get_enrollments.assert_called_once_with(type=["TaEnrollment", "TeacherEnrollment"],
+                                                state=["active", "invited"], per_page=100)
 
 
 class FakeCanvasCourseStaffTests(AppTestCase):
@@ -43,3 +43,14 @@ class FakeCanvasCourseStaffTests(AppTestCase):
         with self.app.test_request_context():
             g.offering = Offering(canvas_id=1234567, key="1234567", name="Fake")
             self.assertEqual(canvas_service.get_course_staff("token"), {"123456": False, "567890": True})
+
+    def test_invited_staff_count_but_not_other_states(self):
+        enrollments = {
+            "123456": {"1234567": {"enrollments": [
+                {"type": "ta", "role": "TaEnrollment", "enrollment_state": "invited"}]}},
+            "567890": {"1234567": {"enrollments": [
+                {"type": "teacher", "role": "TeacherEnrollment", "enrollment_state": "completed"}]}},
+        }
+        with self.app.test_request_context(), patch.dict("server.fake_canvas.FAKE_ENROLLMENTS", enrollments, clear=True):
+            g.offering = Offering(canvas_id=1234567, key="1234567", name="Fake")
+            self.assertEqual(canvas_service.get_course_staff("token"), {"123456": False})
