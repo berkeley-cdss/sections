@@ -22,6 +22,7 @@ from server import canvas_service
 from server.canvas_tokens import current_token
 from server.api_keys import audit_log, authenticate, create_key, init_api_keys, record_use, using_api_key
 from server.login import sync_offering_role
+from server.course_staff import add_staff_role, can_teach_here
 from server.offering import OFFERING_URL_PREFIX, get_canvas_course_id, get_course, get_course_name, load_offering
 from server.import_sheet import check_capacity, import_sections_from_url, import_enrollment_from_url, parse_capacity
 
@@ -141,20 +142,6 @@ def clean_url(label: str, value, column) -> str | None:
     if not ok or re.search(r"\s", value):
         raise Failure(f"{label} must be a web address starting with https:// or http://")
     return value
-
-
-def can_teach_here(user: User) -> bool:
-    """Whether ``user`` can be assigned a section in this offering.
-
-    Their role in an offering is only brought up to date with Canvas when they
-    open its pages, so for anyone who has signed in, go by their Canvas roles
-    from their last sign-in instead. People imported from a spreadsheet who
-    haven't signed in only have their role here. Global admins count only
-    where they're on staff in Canvas, not in every offering."""
-    if user.canvas_id is not None:
-        roles = user.canvas_roles_in(get_canvas_course_id())
-        return roles is not None and roles[0]
-    return get_course() in user.staff_offerings
 
 
 def add_student_helper(student: User, target_section: Section):
@@ -613,9 +600,7 @@ def create_state_client(app: flask.Flask):
             staff = db.session.get(User, int(staff_id))
             if staff is None or not can_teach_here(staff):
                 raise Failure("That person isn't on staff in this course.")
-            if get_course() not in staff.staff_offerings:
-                # On staff in Canvas, but hasn't opened this course here since.
-                staff.set_role(get_course(), is_staff=True, is_admin=staff.canvas_roles_in(get_canvas_course_id())[1])
+            add_staff_role(staff)
             section.staff = staff
         else:
             section.staff = None

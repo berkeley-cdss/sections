@@ -48,15 +48,16 @@ class FakeCourse:
         self.start_at = course["start_at"]
         self.enrollments = list(enrollments)
 
-    def get_enrollments(self, *, type=()) -> list[SimpleNamespace]:
+    def get_enrollments(self, *, type=(), state=("active", "invited"), per_page=10) -> list[SimpleNamespace]:
         """Enrollments in this course, as the course enrollments endpoint gives
-        them: ``type`` is e.g. "StudentEnrollment", and ``user`` a dict."""
+        them: ``type`` is e.g. "StudentEnrollment", and ``user`` a dict. Canvas
+        returns active and invited enrollments unless asked for a ``state``."""
         found = []
         for user_id, courses in FAKE_ENROLLMENTS.items():
             for e in courses.get(str(self.id), {}).get("enrollments", []):
                 # "student" in the user courses endpoint is "StudentEnrollment" here.
                 enrollment_type = e["type"].capitalize() + "Enrollment"
-                if not type or enrollment_type in type:
+                if (not type or enrollment_type in type) and e["enrollment_state"] in state:
                     user = FAKE_USERS[user_id]
                     found.append(SimpleNamespace(type=enrollment_type, role=e["role"], user={
                         "id": user["id"], "name": user["name"], "short_name": user["short_name"],

@@ -1,12 +1,15 @@
 """Importing sections and enrollment from a spreadsheet, and importing sections again."""
 
+import re
 from unittest.mock import patch
+
+from canvasapi.exceptions import Forbidden, InvalidAccessToken, Unauthorized
 
 from flask import g
 
 from server.import_sheet import import_enrollment, import_sections, parse_time_string
 from server.models import Failure, Offering, Section, User, db
-from tests.unit.support import CS61A, CourseTestCase
+from tests.unit.support import CS61A, DATA8, CourseTestCase, canvas_course
 
 
 class SheetImportsTests(CourseTestCase):
@@ -113,3 +116,205 @@ class SheetImportsTests(CourseTestCase):
                 ["staff@test", "Staff", "30", "Room A", "M", "10:00a", "11:00a", "", "TRUE", "Lab"],
                 ["staff@test", "Staff", "30", "Room B", "M", "10:00a", "09:00a", "", "TRUE", "Lab"])
         self.assertEqual(Section.query.filter_by(location="Room A").count(), 0)
+
+
+class SheetImportStaffTests(CourseTestCase):
+    """Imports only make course staff a section's TA."""
+
+    def setUp(self):
+        super().setUp()
+        # Canvas's current CS 61A staff, {canvas user id: is_admin}, for the
+        # importing admin's token. None: the admin has no current token.
+        self.canvas_staff = {}
+        self.token = "token"
+        self.canvas_lookups = 0
+
+        def get_course_staff(access_token):
+            self.assertEqual(access_token, "token")
+            self.canvas_lookups += 1
+            return self.canvas_staff
+
+        for patcher in (patch("server.course_staff.canvas_service.get_course_staff", get_course_staff),
+                        patch("server.course_staff.admin_canvas_token", lambda: self.token)):
+            patcher.start()
+            self.addCleanup(patcher.stop)
+
+    def lab_row(self, email, name="Someone", location="Room Z"):
+        return [email, name, "30", location, "M", "10:00a", "11:00a", "", "TRUE", "Lab"]
+
+    def add_user(self, email, *, canvas_courses=None, staff_in=(), student_in=()):
+        user = User(email=email, name=email, canvas_id=email if canvas_courses is not None else None,
+                    canvas_courses=canvas_courses)
+        for key in staff_in:
+            user.set_role(key, is_staff=True)
+        for key in student_in:
+            user.set_role(key, is_staff=False)
+        db.session.add(user)
+        db.session.commit()
+        return user.id
+
+    def add_last_semesters_student(self, email="returning@test"):
+        """Signed in last semester as a student in an old course, not CS 61A."""
+        return self.add_user(email, canvas_courses={"999": canvas_course("CS 10", student=True)},
+                             student_in=["cs10-old"])
+
+    def assert_refused(self, email, message=None):
+        message = message or f"{email} isn't on staff in this course."
+        with self.assertRaisesRegex(Failure, "^Row 3: " + re.escape(message)):
+            self.import_cs61a_sections(self.lab_row("staff@test", location="Room Y"), self.lab_row(email))
+        db.session.remove()
+        self.assertEqual(Section.query.filter(Section.location.in_(["Room Y", "Room Z"])).count(), 0)
+
+    def import_enrollment_with_staff(self, staff_email):
+        with self.app.test_request_context():
+            g.offering = Offering.query.filter_by(canvas_id=CS61A).one()
+            import_enrollment(iter([
+                ["Student Email", "Student Name", "Staff Email", "Location", "Day", "Start", "Type"],
+                ["new-student@test", "New", staff_email, "Room", "M", "10:00a", "Lab"],
+            ]))
+
+    def test_students_are_refused(self):
+        self.assert_refused("known@test")  # a student in Canvas
+        # Imported as a student, and hasn't signed in: no Canvas account to ask about.
+        self.add_user("imported@test", student_in=["cs61a"])
+        self.assert_refused("imported@test", "imported@test isn't on staff in this course. If they're on "
+                                             "staff in bCourses now, they need to sign in to Sections once first.")
+        self.assertEqual(self.canvas_lookups, 1)  # only for known@test
+
+    def test_people_not_on_staff_here_in_canvas_are_refused(self):
+        # Signed in for DATA 8, where they're on staff, but not in CS 61A.
+        self.add_user("data8@test", canvas_courses={str(DATA8): canvas_course("DATA 8", staff=True)},
+                      staff_in=[str(DATA8)])
+        self.assert_refused("data8@test")
+        # Staff here in Sections, but no longer in Canvas.
+        self.add_user("former@test", canvas_courses={str(CS61A): canvas_course("CS 61A", student=True)},
+                      staff_in=["cs61a"])
+        self.assert_refused("former@test")
+        self.add_last_semesters_student()
+        self.assert_refused("returning@test")
+
+    def test_last_semesters_students_on_staff_now_become_staff(self):
+        # Their saved Canvas courses are from last semester, before CS 61A.
+        ta_id = self.add_last_semesters_student("returning-ta@test")
+        lead_id = self.add_last_semesters_student("returning-lead@test")
+        self.canvas_staff = {"returning-ta@test": False, "returning-lead@test": True}
+        self.assertEqual(self.import_cs61a_sections(
+            self.lab_row("returning-ta@test"), self.lab_row("returning-lead@test", location="Room Y")), (2, 0))
+        ta, lead = db.session.get(User, ta_id), db.session.get(User, lead_id)
+        self.assertIn("cs61a", ta.staff_offerings)
+        self.assertNotIn("cs61a", ta.admin_offerings)
+        self.assertIn("cs61a", lead.admin_offerings)
+        self.assertEqual(Section.query.filter_by(location="Room Z").one().staff_id, ta_id)
+        self.assertEqual(self.canvas_lookups, 1)  # once per import, not per row
+
+    def test_canvas_is_only_asked_when_saved_roles_do_not_show_staff(self):
+        self.add_user("new-ta@test", canvas_courses={str(CS61A): canvas_course("CS 61A", staff=True)})
+        self.assertEqual(self.import_cs61a_sections(
+            self.lab_row("new-ta@test"), self.lab_row("staff@test", location="Room Y"),
+            self.lab_row("brand-new@test", location="Room X")), (3, 0))
+        self.assertEqual(self.canvas_lookups, 0)
+
+    def test_without_a_canvas_token_the_import_asks_to_sign_in_again(self):
+        self.add_last_semesters_student()
+        self.canvas_staff = {"returning@test": False}
+        sign_in_again = "Checking with bCourses whether someone is on staff needs a recent Canvas sign-in"
+        self.token = None
+        self.assert_refused("returning@test", sign_in_again)
+        self.assertEqual(self.canvas_lookups, 0)
+        self.token = "token"
+        with patch("server.course_staff.canvas_service.get_course_staff", side_effect=InvalidAccessToken("revoked")):
+            self.assert_refused("returning@test", sign_in_again)
+
+    def test_canvas_errors_say_what_went_wrong(self):
+        self.add_last_semesters_student()
+        # Canvas answers 401 without WWW-Authenticate, or 403, when the admin's
+        # account can't see the course's enrollments: signing in again won't help.
+        for error in (Unauthorized("not authorized"), Forbidden("forbidden")):
+            with self.subTest(error=error), \
+                    patch("server.course_staff.canvas_service.get_course_staff", side_effect=error):
+                self.assert_refused("returning@test", "Your bCourses account can't see this course's TAs")
+        with patch("server.course_staff.canvas_service.get_course_staff", side_effect=ConnectionError("down")), \
+                self.assertLogs(self.app.logger, "ERROR"):
+            self.assert_refused("returning@test", "Sections couldn't reach bCourses")
+
+    def test_staff_found_in_canvas_stay_staff(self):
+        ta_id = self.add_last_semesters_student("returning-ta@test")
+        self.canvas_staff = {"returning-ta@test": True}
+        self.import_cs61a_sections(self.lab_row("returning-ta@test"))
+        # Saved with their roles from sign-in, so their next request (which
+        # brings their role here in line with those) keeps them on staff...
+        ta = db.session.get(User, ta_id)
+        self.assertEqual(ta.canvas_roles_in(CS61A), (True, True))
+        self.assertEqual(ta.canvas_courses["999"]["code"], "CS 10")  # other courses kept
+        self.sign_in(ta)
+        self.assertTrue(self.api("refresh_state").get_json()["data"]["currentUser"]["isStaff"])
+        # ...and importing again doesn't ask Canvas, so it works without a token.
+        self.token = None
+        self.assertEqual(self.import_cs61a_sections(self.lab_row("returning-ta@test")), (0, 1))
+        self.assertEqual(self.canvas_lookups, 1)
+
+    def test_staff_in_canvas_who_have_not_opened_the_course_become_staff(self):
+        user_id = self.add_user("new-ta@test", canvas_courses={str(CS61A): canvas_course("CS 61A", staff=True)})
+        self.assertEqual(self.import_cs61a_sections(self.lab_row("new-ta@test")), (1, 0))
+        user = db.session.get(User, user_id)
+        self.assertIn("cs61a", user.staff_offerings)
+        self.assertNotIn("cs61a", user.admin_offerings)
+        self.assertEqual(Section.query.filter_by(location="Room Z").one().staff_id, user_id)
+
+    def test_emails_nobody_has_signed_in_with_become_staff(self):
+        # A new email, and one imported for another course.
+        other_id = self.add_user("other-course@test", staff_in=[str(DATA8)])
+        self.assertEqual(self.import_cs61a_sections(
+            self.lab_row("brand-new@test"), self.lab_row("other-course@test", location="Room Y")), (2, 0))
+        for email in ("brand-new@test", "other-course@test"):
+            self.assertIn("cs61a", User.query.filter_by(email=email).one().staff_offerings)
+        self.assertIn(str(DATA8), db.session.get(User, other_id).staff_offerings)
+
+    def test_enrollment_staff_email_must_be_on_staff(self):
+        for email in ("known@test", "nobody@test"):  # a student, and someone not in the course
+            with self.subTest(email=email), \
+                    self.assertRaisesRegex(Failure, f"^Row 2: {email} isn't on staff in this course."):
+                self.import_enrollment_with_staff(email)
+
+    def test_enrollment_accepts_last_semesters_students_on_staff_now(self):
+        # In CS 61A from a sections import, while their saved roles say they aren't staff here.
+        ta_id = self.add_last_semesters_student()
+        ta = db.session.get(User, ta_id)
+        ta.set_role("cs61a", is_staff=False)
+        section = db.session.get(Section, self.section_id)
+        section.staff, section.start_time = ta, parse_time_string("M", "10:00a")
+        db.session.commit()
+        self.canvas_staff = {"returning@test": False}
+        self.import_enrollment_with_staff("returning@test")
+        db.session.remove()
+        self.assertEqual([s.id for s in User.query.filter_by(email="new-student@test").one().sections],
+                         [self.section_id])
+
+
+class SheetImportCanvasTokenTests(CourseTestCase):
+    """The import endpoint asks Canvas with the signed-in admin's own token."""
+
+    def import_through_the_api(self, *rows):
+        sheet = [CourseTestCase.SECTIONS_HEADER, *rows]
+        with patch("server.import_sheet.read_spreadsheet", return_value=sheet):
+            return self.api("import_sections_from_sheet", url="https://docs.google.com/spreadsheets/d/x").get_json()
+
+    def test_returning_ta_through_the_api(self):
+        self.make_staff_admin()
+        returning = User(email="returning@test", name="Returning", canvas_id="77",
+                         canvas_courses={"999": canvas_course("CS 10", student=True)})
+        db.session.add(returning)
+        db.session.commit()
+        row = ["returning@test", "Returning", "30", "Room Z", "M", "10:00a", "11:00a", "", "TRUE", "Lab"]
+
+        body = self.import_through_the_api(row)
+        self.assertFalse(body["success"])
+        self.assertIn("needs a recent Canvas sign-in", body["message"])
+
+        self.authorize(handle="admin-handle")
+        with patch("server.course_staff.canvas_service.get_course_staff", return_value={"77": False}) as lookup:
+            body = self.import_through_the_api(row)
+        self.assertTrue(body["success"], body)
+        self.assertEqual(lookup.call_args.args, ("access",))
+        self.assertIn("cs61a", User.query.filter_by(email="returning@test").one().staff_offerings)
+
