@@ -66,7 +66,6 @@ SKIPPED_RULES = {
     "/assets/<path:filename>": "not a page",
     "/<path:filename>": "not a page (the React build's files)",
     "/health": "not a page",
-    "/offerings/<int:canvas_course_id>/debug": "not a page",
     "/login/": "redirects to the login page",
     "/authorized/": "redirects after login",
     "/logout/": "redirects after logout",

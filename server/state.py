@@ -248,11 +248,6 @@ def create_state_client(app: flask.Flask):
         current_user.is_authenticated
         return render_template("index.html", course=get_course_name())
 
-    @bp.route("/debug")
-    def debug():
-        refresh_state()
-        return "<body></body>"
-
     @api
     def refresh_state():
         """
@@ -263,10 +258,6 @@ def create_state_client(app: flask.Flask):
         """
         refresh_started_at = time.perf_counter()
         config = CourseConfig.query.filter_by(course=get_course()).one_or_none()
-        if config is None:
-            config = CourseConfig(course=get_course())
-            db.session.add(config)
-            db.session.commit()
 
         out = {
             "enrolledSections": None,
@@ -274,12 +265,20 @@ def create_state_client(app: flask.Flask):
             "sections": [],
             "currentUser": None,
             "course": get_course_name(),
-            "config": config.json,
-            "serviceAccountEmail": current_app.config.get("GOOGLE_SERVICE_ACCOUNT_EMAIL"),
+            # Signed out, only what the sign-in page shows.
+            "config": {"message": config.message if config else ""},
+            "serviceAccountEmail": None,
             "custom": None,
         }
 
         if current_user.is_authenticated:
+            if config is None:
+                config = CourseConfig(course=get_course())
+                db.session.add(config)
+                db.session.commit()
+            out["config"] = config.json
+            out["serviceAccountEmail"] = current_app.config.get("GOOGLE_SERVICE_ACCOUNT_EMAIL")
+
             course = get_course()
             enrolled_sections = current_user.sections_in(course)
             taught_sections = [s for s in current_user.sections_taught if s.course == course]

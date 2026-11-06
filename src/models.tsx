@@ -92,6 +92,7 @@ export type State = {
   sections: Array<Section>;
   taughtSections: Array<Section>;
   currentUser: PersonDetails | null;
+  // Signed out, the server sends only config.message.
   config: CourseConfig;
   // Google account to share import spreadsheets with, if configured.
   serviceAccountEmail: string | null;
