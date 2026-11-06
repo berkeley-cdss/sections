@@ -33,7 +33,7 @@ class CrossOriginTests(CourseTestCase):
                 self.assert_refused(self.post("/logout/", headers=headers))
         self.assertEqual(Offering.query.filter_by(canvas_id=CS61A).count(), 1)
         self.assertEqual(Offering.query.filter_by(canvas_id=UNSET_UP).count(), 0)
-        # Still signed in: other sites can't sign users out (issue #60).
+        # Still signed in: other sites can't sign users out.
         self.assertIsNotNone(self.api("refresh_state").get_json()["data"]["currentUser"])
 
     def test_cross_origin_api_calls_are_refused(self):

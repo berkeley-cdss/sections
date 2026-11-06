@@ -177,7 +177,7 @@ class LoginTests(CourseTestCase):
         return user and user["id"]
 
     def test_logging_out_takes_a_post_from_sections(self):
-        # A link or redirect from another site is a GET, which no longer signs the user out (issue #60).
+        # A link or redirect from another site is a GET, which no longer signs the user out.
         self.assertNotEqual(self.get("/logout/").status_code, 302)
         self.assertEqual(self.signed_in_user_id(), self.staff_id)
 
