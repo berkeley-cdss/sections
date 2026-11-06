@@ -22,6 +22,8 @@ export default defineConfig({
       "^/offerings/\\d+/api/": backend,
       "^/offerings/?$": backend,
       "/offerings/new": backend,
+      // The Offerings page's form for removing an offering.
+      "^/offerings/\\d+/remove$": backend,
       "/login/": backend,
       "/authorized/": backend,
       "/dev_login/": backend,
