@@ -6,6 +6,11 @@ from typing import List, Iterator
 
 from zoneinfo import ZoneInfo
 
+from canvasapi.exceptions import InvalidAccessToken, Unauthorized
+from flask_login import current_user
+
+from server import canvas_service
+from server.canvas_tokens import current_token
 from server.offering import add_staff_role, can_teach_here, get_course
 from server.google_sheets import read_spreadsheet
 from dataclasses import asdict, dataclass, field, fields
@@ -49,7 +54,49 @@ def parse_time_string(day, time, label="Time"):
     ).timestamp())
 
 
-def section_staff(email: str, name: str, row_number: int) -> User:
+def canvas_token() -> str | None:
+    """The importing admin's Canvas token, if they have a current one."""
+    return current_token(current_user) if current_user.is_authenticated else None
+
+
+class StaffCheck:
+    """Whether people can teach here, for one import.
+
+    Roles saved at someone's last sign-in can be out of date: last semester's
+    student may be on staff in a course that's new since. So when the saved
+    roles don't put them on staff here, ask Canvas, once per import."""
+
+    def __init__(self):
+        self.canvas_staff: dict[str, bool] | None = None
+
+    def check(self, user: User, email: str, row_number: int):
+        """Make ``user`` staff here, or fail if they aren't on staff."""
+        if can_teach_here(user):
+            add_staff_role(user)
+            return
+        if user.canvas_id is not None:
+            is_admin = self.current_canvas_staff(row_number).get(str(user.canvas_id))
+            if is_admin is not None:
+                user.set_role(get_course(), is_staff=True, is_admin=is_admin)
+                return
+        raise Failure(f"Row {row_number}: {email} isn't on staff in this course.")
+
+    def current_canvas_staff(self, row_number: int) -> dict[str, bool]:
+        if self.canvas_staff is None:
+            expired = Failure(
+                f"Row {row_number}: Checking this row's staff member with Canvas needs a current "
+                "Canvas sign-in. Log out and sign in with Canvas again, then retry the import.")
+            access_token = canvas_token()
+            if access_token is None:
+                raise expired
+            try:
+                self.canvas_staff = canvas_service.get_course_staff(access_token)
+            except (InvalidAccessToken, Unauthorized):
+                raise expired
+        return self.canvas_staff
+
+
+def section_staff(email: str, name: str, row_number: int, staff_check: StaffCheck) -> User:
     """The staff member a row of the Sections sheet assigns its section to."""
     user = with_email(email)
     if user is None or (user.canvas_id is None and not user.is_member_of(get_course())):
@@ -58,9 +105,7 @@ def section_staff(email: str, name: str, row_number: int) -> User:
         user = find_or_add_person(email, name)
         user.set_role(get_course(), is_staff=True)
         return user
-    if not can_teach_here(user):
-        raise Failure(f"Row {row_number}: {email} isn't on staff in this course.")
-    add_staff_role(user)
+    staff_check.check(user, email, row_number)
     return user
 
 
@@ -174,6 +219,7 @@ def import_sections(data: Iterator):
         row_keys.append(section_key(row[header.type_index], start_time, end_time, row[header.location_index]))
     rows_per_key = {key: row_keys.count(key) for key in row_keys}
     matched = set()
+    staff_check = StaffCheck()
     added = updated = 0
 
     for row_number, (row, key) in enumerate(zip(rows, row_keys), start=2):
@@ -192,7 +238,7 @@ def import_sections(data: Iterator):
             raise Failure(f"Unknown boolean value: {can_self_enroll}")
         can_self_enroll = can_self_enroll == "true"
 
-        staff = section_staff(email, name, row_number)
+        staff = section_staff(email, name, row_number, staff_check)
 
         candidates = [s for s in existing.get(key, []) if s.id not in matched]
         if len(existing.get(key, [])) > 1 or rows_per_key[key] > 1:
@@ -247,6 +293,7 @@ def import_sections_from_url(url: str):
 def import_enrollment(data: Iterator):
     model = EnrollmentHeader()
     header = process_header(model, next(data))
+    staff_check = StaffCheck()
 
     for row_number, row in enumerate(data, start=2):
         student_email = row[header.student_email_index]
@@ -265,8 +312,9 @@ def import_enrollment(data: Iterator):
             student.set_role(get_course(), is_staff=False)
 
         staff = offering_member(email=staff_email)
-        if staff is None or not can_teach_here(staff):
+        if staff is None:
             raise Failure(f"Row {row_number}: {staff_email} isn't on staff in this course.")
+        staff_check.check(staff, staff_email, row_number)
 
         # Assumes that each section can be uniquely identified by the below parameters
         section = Section.query.filter_by(
