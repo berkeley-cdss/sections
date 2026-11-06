@@ -68,7 +68,6 @@ SKIPPED_RULES = {
     "/health": "not a page",
     "/login/": "redirects to the login page",
     "/authorized/": "redirects after login",
-    "/logout/": "redirects after logout",
 }
 
 # Sections' error pages are titled with their status, e.g. "404 Not Found", or say what failed.

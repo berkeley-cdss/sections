@@ -181,7 +181,8 @@ def create_login_client(app: flask.Flask):
         for key in LEGACY_SESSION_KEYS:
             session.pop(key, None)
 
-    @app.route("/logout/")
+    # A POST, so the cross-origin check covers it and other sites can't sign users out.
+    @app.route("/logout/", methods=["POST"])
     def logout():
         session.pop(SIGNED_IN_AT_KEY, None)
         discard_token()
