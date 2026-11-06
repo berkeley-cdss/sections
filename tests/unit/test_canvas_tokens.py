@@ -34,7 +34,7 @@ class CanvasTokenTests(CourseTestCase):
     def test_logout_deletes_and_revokes_the_token(self):
         self.authorize()
         with patch("server.canvas_tokens.canvas_service.revoke_token") as revoke:
-            self.get("/logout/")
+            self.post("/logout/")
         revoke.assert_called_once_with("access")
         self.assertEqual(CanvasToken.query.count(), 0)
         with self.client.session_transaction() as browser:
@@ -43,7 +43,7 @@ class CanvasTokenTests(CourseTestCase):
     def test_a_copy_of_the_cookie_cannot_use_the_token_after_logout(self):
         self.authorize(handle="copied")
         with patch("server.canvas_tokens.canvas_service.revoke_token"):
-            self.get("/logout/")
+            self.post("/logout/")
         # Someone replays a copy of the cookie from before the logout.
         self.sign_in(db.session.get(User, self.staff_id))
         with self.client.session_transaction() as browser:

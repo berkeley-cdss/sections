@@ -172,6 +172,19 @@ class LoginTests(CourseTestCase):
         self.assertIn("/login/", self.get("/offerings").headers["Location"])
         self.assertEqual(self.api("join_section", target_section_id=str(self.section_id)).status_code, 401)
 
+    def signed_in_user_id(self):
+        user = self.api("refresh_state").get_json()["data"]["currentUser"]
+        return user and user["id"]
+
+    def test_logging_out_takes_a_post_from_sections(self):
+        # A link or redirect from another site is a GET, which no longer signs the user out.
+        self.assertNotEqual(self.get("/logout/").status_code, 302)
+        self.assertEqual(self.signed_in_user_id(), self.staff_id)
+
+        response = self.post("/logout/", headers={"Sec-Fetch-Site": "same-origin", "Origin": "http://localhost"})
+        self.assertEqual(response.status_code, 302)
+        self.assertIsNone(self.signed_in_user_id())
+
     def test_sign_ins_expire_so_roles_are_refreshed_from_canvas(self):
         self.assertEqual(self.api("refresh_state").get_json()["data"]["currentUser"]["id"], self.staff_id)
         with self.client.session_transaction() as browser:
