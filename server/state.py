@@ -735,28 +735,53 @@ def create_state_client(app: flask.Flask):
 
     def sync_bcourses_changes():
         """Make this offering's students the course's students on bCourses,
-        without committing. Returns (added, removed, skipped): the emails of
-        students added and removed, and of students on the roster who weren't
-        added because their email belongs to another bCourses account here."""
+        without committing. Returns a dict of lists: the emails of students
+        ``added`` and ``removed``; the emails of students on the roster who
+        weren't added because the email belongs to someone here with another
+        bCourses account (``skipped``); and the names of students who weren't
+        added because bCourses didn't share their email (``no_email``)."""
         course = get_course()
         canvas_key = str(get_canvas_course_id())
-        on_roster, added, skipped = set(), [], []
-        for entry in bcourses_roster():
-            try:
-                person = find_or_add_person(entry["email"], entry["name"], canvas_id=entry["canvas_id"])
-            except Failure:
-                # Someone else here has this email, linked to another bCourses
-                # account; whether they're the same person is for a person to say.
-                skipped.append(entry["email"])
-                continue
+        started_at = time.perf_counter()
+        roster = bcourses_roster()
+        fetched_at = time.perf_counter()
+
+        # Everyone the roster could match, in two queries rather than one or two per student.
+        by_canvas_id = {user.canvas_id: user for user in
+                        User.query.filter(User.canvas_id.in_([entry["canvas_id"] for entry in roster]))}
+        emails = {entry["email"].strip().lower() for entry in roster if entry["email"]}
+        by_email = {user.email.lower(): user for user in User.query.filter(func.lower(User.email).in_(emails))}
+
+        on_roster = set()
+        changes = {"added": [], "removed": [], "skipped": [], "no_email": []}
+        for entry in roster:
+            person = by_canvas_id.get(entry["canvas_id"])
+            if person is None:
+                email = (entry["email"] or "").strip()
+                if not email:
+                    changes["no_email"].append(entry["name"])
+                    continue
+                person = by_email.get(email.lower())
+                if person is not None and person.canvas_id is not None:
+                    # Someone else here has this email, linked to another bCourses
+                    # account; whether they're the same person is for a person to say.
+                    changes["skipped"].append(email)
+                    continue
+                if person is None:
+                    person = User(email=email, name=entry["name"])
+                    db.session.add(person)
+                    by_email[email.lower()] = person
+                # Imported from a spreadsheet or added by email: link them to
+                # their bCourses account, as signing in would.
+                person.canvas_id = entry["canvas_id"]
+                by_canvas_id[entry["canvas_id"]] = person
             on_roster.add(person)
             if course in person.staff_offerings:
                 continue  # roles on staff come from their own sign-in
             if course not in person.student_offerings:
                 person.set_role(course, is_staff=False)
-                added.append(person.email)
+                changes["added"].append(person.email)
 
-        removed = []
         for student in User.query.filter(set_contains(User.student_offerings, course)).all():
             if student in on_roster:
                 continue
@@ -768,8 +793,12 @@ def create_state_client(app: flask.Flask):
                 # them back from the roles saved at their last sign-in. A new
                 # dict, so SQLAlchemy sees the JSON column change.
                 student.canvas_courses = {k: v for k, v in student.canvas_courses.items() if k != canvas_key}
-            removed.append(student.email)
-        return sorted(added), sorted(removed), sorted(skipped)
+            changes["removed"].append(student.email)
+
+        current_app.logger.info("bCourses sync in %s: %d students on the roster, read from Canvas in %.1fs, "
+                                "matched in %.1fs", course, len(roster), fetched_at - started_at,
+                                time.perf_counter() - fetched_at)
+        return {key: sorted(values) for key, values in changes.items()}
 
     @api
     @admin_required
@@ -777,10 +806,9 @@ def create_state_client(app: flask.Flask):
     def preview_bcourses_sync():
         """What sync_bcourses would change now, changing nothing."""
         try:
-            added, removed, skipped = sync_bcourses_changes()
+            return sync_bcourses_changes()
         finally:
             db.session.rollback()
-        return {"added": added, "removed": removed, "skipped": skipped}
 
     @api
     @admin_required
@@ -788,15 +816,19 @@ def create_state_client(app: flask.Flask):
     def sync_bcourses():
         """Add the course's students on bCourses (including invited ones) to this
         offering, and remove students no longer there from it and its sections."""
-        added, removed, skipped = sync_bcourses_changes()
+        changes = sync_bcourses_changes()
         db.session.commit()
-        current_app.logger.info("bCourses sync in %s by %s: added %d, removed %d (%s), skipped %d",
+        added, removed, skipped, no_email = (changes[key] for key in ("added", "removed", "skipped", "no_email"))
+        current_app.logger.info("bCourses sync in %s by %s: added %d, removed %d (%s), skipped %d, no email %d",
                                 get_course(), current_user.email, len(added), len(removed),
-                                ", ".join(removed), len(skipped))
+                                ", ".join(removed), len(skipped), len(no_email))
         message = f"Added {len(added)} students and removed {len(removed)}."
         if skipped:
             message += (f" Didn't add {len(skipped)} whose email belongs to a different bCourses account "
                         "in Sections: " + ", ".join(skipped) + ".")
+        if no_email:
+            message += (f" Didn't add {len(no_email)} whose email bCourses didn't share: "
+                        + ", ".join(no_email) + ".")
         return {**refresh_state(), "custom": {"message": message}}
 
     @api

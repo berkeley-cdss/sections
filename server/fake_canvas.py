@@ -48,6 +48,23 @@ class FakeCourse:
         self.start_at = course["start_at"]
         self.enrollments = list(enrollments)
 
+    def get_users(self, *, enrollment_type=(), enrollment_state=("active", "invited"), include=(),
+                  per_page=10) -> list[SimpleNamespace]:
+        """Users in this course, once each, as the course users endpoint gives
+        them: ``enrollment_type`` is e.g. "student", and the email is only
+        there if ``include`` asks for it."""
+        found = []
+        for user_id, courses in FAKE_ENROLLMENTS.items():
+            enrollments = courses.get(str(self.id), {}).get("enrollments", [])
+            if any((not enrollment_type or e["type"] in enrollment_type) and e["enrollment_state"] in enrollment_state
+                   for e in enrollments):
+                user = FAKE_USERS[user_id]
+                fields = {key: user[key] for key in ("id", "name", "short_name", "login_id", "sis_user_id")}
+                if "email" in include:
+                    fields["email"] = user["email"]
+                found.append(SimpleNamespace(**fields))
+        return found
+
     def get_enrollments(self, *, type=(), state=("active", "invited"), per_page=10) -> list[SimpleNamespace]:
         """Enrollments in this course, as the course enrollments endpoint gives
         them: ``type`` is e.g. "StudentEnrollment", and ``user`` a dict. Canvas

@@ -1,6 +1,8 @@
 """Syncing an offering's students with its bCourses roster."""
 
 import json
+
+import sqlalchemy
 from types import SimpleNamespace
 from unittest.mock import patch
 
@@ -88,7 +90,7 @@ class SyncBcoursesTests(CourseTestCase):
     def test_preview_changes_nothing(self):
         body = self.sync([entry("4", "new@test")], method="preview_bcourses_sync")
         self.assertTrue(body["success"], body)
-        self.assertEqual(body["data"], {"added": ["new@test"], "removed": ["known@test"], "skipped": []})
+        self.assertEqual(body["data"], {"added": ["new@test"], "removed": ["known@test"], "skipped": [], "no_email": []})
         self.assertEqual(self.students(), {"known@test"})
         self.assertIsNone(User.query.filter_by(email="new@test").one_or_none())
 
@@ -96,7 +98,7 @@ class SyncBcoursesTests(CourseTestCase):
         # staff@test is Canvas user 1 here, so Canvas user 8 with that login isn't added.
         roster = [entry("2", "known@test"), entry("8", "staff@test")]
         body = self.sync(roster, method="preview_bcourses_sync")
-        self.assertEqual(body["data"], {"added": [], "removed": [], "skipped": ["staff@test"]})
+        self.assertEqual(body["data"], {"added": [], "removed": [], "skipped": ["staff@test"], "no_email": []})
         body = self.sync(roster)
         self.assertTrue(body["success"], body)
         self.assertEqual(body["data"]["custom"]["message"],
@@ -104,6 +106,29 @@ class SyncBcoursesTests(CourseTestCase):
                          "bCourses account in Sections: staff@test.")
         self.assertEqual(self.students(), {"known@test"})
         self.assertIsNone(User.query.filter_by(canvas_id="8").one_or_none())
+
+    def test_without_an_email_only_known_students_are_matched(self):
+        # Matched by Canvas id, they need no email; someone new can't be added without one.
+        body = self.sync([entry("2", None), entry("4", None, "No Email")])
+        self.assertTrue(body["success"], body)
+        self.assertEqual(body["data"]["custom"]["message"],
+                         "Added 0 students and removed 0. Didn't add 1 whose email bCourses didn't share: No Email.")
+        self.assertEqual(self.students(), {"known@test"})
+
+    def test_matching_takes_a_few_queries_however_many_students(self):
+        # One or two queries per student made a large course take minutes.
+        for i in range(30):
+            user = User(email=f"s{i}@test", name="S", canvas_id=str(100 + i) if i % 2 else None)
+            user.set_role("cs61a", is_staff=False)
+            db.session.add(user)
+        db.session.commit()
+        roster = [entry(str(100 + i), f"S{i}@TEST") for i in range(30)] + [entry("2", "known@test")]
+        statements = []
+        listen = sqlalchemy.event.listens_for(db.engine, "before_cursor_execute")
+        listen(lambda *args: statements.append(args[2]))
+        body = self.sync(roster, method="preview_bcourses_sync")
+        self.assertEqual(body["data"], {"added": [], "removed": [], "skipped": [], "no_email": []})
+        self.assertLess(len(statements), 15, statements)
 
     def test_empty_roster_changes_nothing(self):
         body = self.sync([])
@@ -138,22 +163,22 @@ class SyncBcoursesTests(CourseTestCase):
 
 
 class GetRosterTests(CourseTestCase):
-    def test_students_once_each_with_their_display_name(self):
+    def test_students_with_their_email_and_display_name(self):
         from server import canvas_service
-
-        def enrollment(canvas_id, login_id, name):
-            return SimpleNamespace(user={"id": canvas_id, "login_id": login_id, "name": name,
-                                         "short_name": f"{name} (display)"})
 
         client = patch("server.canvas_service._client").start()
         self.addCleanup(patch.stopall)
-        get_enrollments = client.return_value.get_course.return_value.get_enrollments
-        # In two sections of the course; and a user with no login is left out.
-        get_enrollments.return_value = [enrollment(5, "a@test", "A"), enrollment(5, "a@test", "A"),
-                                        enrollment(6, None, "B")]
+        get_users = client.return_value.get_course.return_value.get_users
+        # At Berkeley the login is a CalNet UID, not an email; and Canvas may not share an email.
+        get_users.return_value = [
+            SimpleNamespace(id=5, login_id="1717117", email="a@test", name="A", short_name="A (display)"),
+            SimpleNamespace(id=6, login_id="1717118", name="B", short_name=""),
+        ]
         with self.app.test_request_context():
             g.offering = Offering.query.filter_by(canvas_id=CS61A).one()
-            self.assertEqual(canvas_service.get_roster("token"),
-                             [{"canvas_id": "5", "email": "a@test", "name": "A (display)"}])
-        get_enrollments.assert_called_once_with(type=["StudentEnrollment"], state=["active", "invited"],
-                                                per_page=100)
+            self.assertEqual(canvas_service.get_roster("token"), [
+                {"canvas_id": "5", "email": "a@test", "name": "A (display)"},
+                {"canvas_id": "6", "email": None, "name": "B"},
+            ])
+        get_users.assert_called_once_with(enrollment_type=["student"], enrollment_state=["active", "invited"],
+                                          include=["email"], per_page=100)

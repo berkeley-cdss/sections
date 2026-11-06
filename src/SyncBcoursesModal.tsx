@@ -15,6 +15,7 @@ type Preview = {
   added: Array<string>;
   removed: Array<string>;
   skipped: Array<string>;
+  no_email: Array<string>;
 };
 
 function EmailList({
@@ -31,8 +32,9 @@ function EmailList({
     <details className="mb-2">
       <summary>{title}</summary>
       <ul className="mb-0">
-        {emails.map((email) => (
-          <li key={email}>{email}</li>
+        {emails.map((email, i) => (
+          // Names, unlike emails, can repeat.
+          <li key={`${i}-${email}`}>{email}</li>
         ))}
       </ul>
     </details>
@@ -85,7 +87,7 @@ export default function SyncBcoursesModal({ show, onClose }: Props) {
           including students who haven&rsquo;t accepted their invitation yet.
           Students no longer on the roster are removed from the course and its
           sections; their attendance records are kept. Staff aren&rsquo;t
-          changed.
+          changed. This may take a minute to load.
         </p>
         {loading ? (
           <div role="status" aria-live="polite">
@@ -123,6 +125,19 @@ export default function SyncBcoursesModal({ show, onClose }: Props) {
                 <EmailList
                   title={`Students not added (${preview.skipped.length})`}
                   emails={preview.skipped}
+                />
+              </>
+            )}
+            {preview.no_email.length > 0 && (
+              <>
+                <p className="mt-3 mb-1">
+                  {preview.no_email.length} students on the bCourses roster
+                  won&rsquo;t be added because bCourses didn&rsquo;t share their
+                  email, which Sections needs for everyone.
+                </p>
+                <EmailList
+                  title={`Students without an email (${preview.no_email.length})`}
+                  emails={preview.no_email}
                 />
               </>
             )}
