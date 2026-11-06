@@ -1,7 +1,7 @@
 """Admins changing the course's settings, including its staff page link (#25)."""
 
 from server.models import CourseConfig, db
-from tests.unit.support import CourseTestCase
+from tests.unit.support import CS61A, CourseTestCase
 
 
 class StaffUrlTests(CourseTestCase):
@@ -49,3 +49,39 @@ class StaffUrlTests(CourseTestCase):
         self.course_config()
         body = self.api("update_config", can_students_join_lab=False).get_json()
         self.assertFalse(body["data"]["config"]["canStudentsJoinLab"])
+
+
+class SignedOutTests(CourseTestCase):
+    """Signed out, a course shows only what its sign-in page needs (#51)."""
+
+    def sign_out(self):
+        with self.client.session_transaction() as browser:
+            browser.clear()
+
+    def test_only_the_name_and_welcome_message(self):
+        self.make_staff_admin()
+        self.course_config()
+        self.api("update_config", message="Welcome!", staff_url="https://cs61a.org/staff/",
+                 can_students_join_lab=False)
+        self.app.config["GOOGLE_SERVICE_ACCOUNT_EMAIL"] = "sheets@test"
+        self.sign_out()
+        state = self.api("refresh_state").get_json()["data"]
+        self.assertEqual(state["config"], {"message": "Welcome!"})
+        self.assertIsNone(state["serviceAccountEmail"])
+        self.assertIsNone(state["currentUser"])
+        self.assertEqual(state["sections"], [])
+        self.assertEqual(state["course"], "CS 61A")
+
+    def test_does_not_create_the_settings_row(self):
+        self.sign_out()
+        state = self.api("refresh_state").get_json()["data"]
+        self.assertEqual(state["config"], {"message": ""})
+        self.assertEqual(CourseConfig.query.count(), 0)
+
+    def test_no_debug_page(self):
+        self.sign_out()
+        self.assertEqual(self.get(f"/offerings/{CS61A}/debug").status_code, 404)
+        self.assertEqual(CourseConfig.query.count(), 0)
+
+    def course_config(self):
+        return self.api("refresh_state").get_json()["data"]["config"]
