@@ -1,7 +1,7 @@
 import csv
 import re
 import time
-from canvasapi.exceptions import InvalidAccessToken, Unauthorized
+from canvasapi.exceptions import Forbidden, InvalidAccessToken, Unauthorized
 
 from io import StringIO
 from datetime import datetime
@@ -710,6 +710,95 @@ def create_state_client(app: flask.Flask):
         db.session.commit()
         return refresh_state()
 
+    def bcourses_roster() -> list[dict]:
+        """The course's students on bCourses (canvas_service.get_roster), or a
+        Failure saying why they can't be read."""
+        sign_in_again = Failure("Syncing with bCourses needs a recent Canvas sign-in in this browser. "
+                                "Log out and sign in with Canvas again, then retry.")
+        access_token = current_token(current_user)
+        if access_token is None:
+            raise sign_in_again
+        try:
+            roster = canvas_service.get_roster(access_token)
+        except InvalidAccessToken:
+            raise sign_in_again
+        except (Unauthorized, Forbidden):
+            raise Failure("Your bCourses account can't see this course's students, so Sections can't sync them.")
+        except Exception:
+            current_app.logger.exception("Couldn't get the course's students from Canvas")
+            raise Failure("Sections couldn't reach bCourses to sync students. Try again in a few minutes.")
+        if not roster:
+            # More likely a problem in bCourses than a course with no students;
+            # syncing would remove everyone.
+            raise Failure("bCourses listed no students in this course, so nothing was changed.")
+        return roster
+
+    def sync_bcourses_changes():
+        """Make this offering's students the course's students on bCourses,
+        without committing. Returns (added, removed, skipped): the emails of
+        students added and removed, and of students on the roster who weren't
+        added because their email belongs to another bCourses account here."""
+        course = get_course()
+        canvas_key = str(get_canvas_course_id())
+        on_roster, added, skipped = set(), [], []
+        for entry in bcourses_roster():
+            try:
+                person = find_or_add_person(entry["email"], entry["name"], canvas_id=entry["canvas_id"])
+            except Failure:
+                # Someone else here has this email, linked to another bCourses
+                # account; whether they're the same person is for a person to say.
+                skipped.append(entry["email"])
+                continue
+            on_roster.add(person)
+            if course in person.staff_offerings:
+                continue  # roles on staff come from their own sign-in
+            if course not in person.student_offerings:
+                person.set_role(course, is_staff=False)
+                added.append(person.email)
+
+        removed = []
+        for student in User.query.filter(set_contains(User.student_offerings, course)).all():
+            if student in on_roster:
+                continue
+            student.student_offerings = student.student_offerings - {course}
+            # Out of this offering's sections; their attendance records stay.
+            student.sections = [section for section in student.sections if section.course != course]
+            if canvas_key in (student.canvas_courses or {}):
+                # Otherwise their next request (sync_offering_role) would add
+                # them back from the roles saved at their last sign-in. A new
+                # dict, so SQLAlchemy sees the JSON column change.
+                student.canvas_courses = {k: v for k, v in student.canvas_courses.items() if k != canvas_key}
+            removed.append(student.email)
+        return sorted(added), sorted(removed), sorted(skipped)
+
+    @api
+    @admin_required
+    @session_only
+    def preview_bcourses_sync():
+        """What sync_bcourses would change now, changing nothing."""
+        try:
+            added, removed, skipped = sync_bcourses_changes()
+        finally:
+            db.session.rollback()
+        return {"added": added, "removed": removed, "skipped": skipped}
+
+    @api
+    @admin_required
+    @session_only
+    def sync_bcourses():
+        """Add the course's students on bCourses (including invited ones) to this
+        offering, and remove students no longer there from it and its sections."""
+        added, removed, skipped = sync_bcourses_changes()
+        db.session.commit()
+        current_app.logger.info("bCourses sync in %s by %s: added %d, removed %d (%s), skipped %d",
+                                get_course(), current_user.email, len(added), len(removed),
+                                ", ".join(removed), len(skipped))
+        message = f"Added {len(added)} students and removed {len(removed)}."
+        if skipped:
+            message += (f" Didn't add {len(skipped)} whose email belongs to a different bCourses account "
+                        "in Sections: " + ", ".join(skipped) + ".")
+        return {**refresh_state(), "custom": {"message": message}}
+
     @api
     @staff_required
     def add_student(email: str, section_id: str):
@@ -791,7 +880,10 @@ def create_state_client(app: flask.Flask):
         emails = set()
         course = get_course()
         for user in (
-            User.query.filter(set_contains(User.student_offerings, course))
+            # Students no longer in the course (e.g. removed by a bCourses sync)
+            # keep their attendance, so they're included too.
+            User.query.filter(set_contains(User.student_offerings, course)
+                              | User.attendances.any(Attendance.course == course))
             .options(joinedload(User.attendances).joinedload(Attendance.session))
             .all()
         ):

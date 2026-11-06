@@ -6,8 +6,8 @@ import urllib.request
 
 from selenium.webdriver.common.by import By
 
-from server.models import CourseConfig
-from tests.browser import COURSE, OFFERING, STUDENT, TEACHER
+from server.models import CourseConfig, Section, User
+from tests.browser import COURSE, LAB_ID, OFFERING, STUDENT, TEACHER
 
 
 def config(database):
@@ -40,6 +40,34 @@ def test_admin_stops_students_joining_discussions(site, database):
     site.visit(f"{OFFERING}/disc", STUDENT)
     assert "Wheeler 150" in site.card("Wheeler 150").text
     assert not site.has_text("Join Section")
+
+
+def students(database):
+    with database() as session:
+        return {user.email for user in session.query(User).all() if str(COURSE) in user.student_offerings}
+
+
+def test_admin_syncs_students_with_bcourses(site, database):
+    # Dropped from the course in bCourses since being put in the lab.
+    with database() as session:
+        dropped = User(email="dropped@example.com", name="Dropped")
+        dropped.set_role(str(COURSE), is_staff=False)
+        dropped.sections.append(session.get(Section, LAB_ID))
+        session.add(dropped)
+        session.commit()
+
+    site.visit(f"{OFFERING}/admin", TEACHER)
+    site.click("Sync bCourses")
+    dialog = site.find('//*[@role="dialog"]')
+    # The fake Canvas lists three students in the course; Jimmy Xu is already here.
+    site.wait(lambda: "This will add 2 and remove 1 students." in dialog.text)
+    assert students(database) == {"jimmyxu@example.com", "dropped@example.com"}
+
+    site.click("Sync", dialog)
+    site.wait(lambda: site.has_text("Added 2 students and removed 1."))
+    assert students(database) == {"jimmyxu@example.com", "sharon@berkeley.edu", "angelaz8@berkeley.edu"}
+    with database() as session:
+        assert [user.email for user in session.get(Section, LAB_ID).students] == ["jimmyxu@example.com"]
 
 
 def test_students_cannot_open_the_admin_page(site):
