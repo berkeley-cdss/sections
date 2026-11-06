@@ -182,3 +182,34 @@ class GetRosterTests(CourseTestCase):
             ])
         get_users.assert_called_once_with(enrollment_type=["student"], enrollment_state=["active", "invited"],
                                           include=["email"], per_page=100)
+
+    def test_requests_only_urls_sections_has_scopes_for(self):
+        # bCourses refuses a URL the sign-in didn't ask for a scope for, and
+        # canvasapi's method names don't always say which URL they call.
+        import re
+
+        from server import canvas_service
+
+        requested = []
+
+        def request(method, endpoint, **kwargs):
+            requested.append((method, endpoint))
+            if endpoint.startswith("courses/") and endpoint.count("/") == 1:
+                return SimpleNamespace(json=lambda: {"id": CS61A}, links={})
+            return SimpleNamespace(json=lambda: [{"id": 5, "name": "A", "email": "a@test"}], links={})
+
+        def has_scope(method, endpoint):
+            for scope in canvas_service.SCOPES:
+                scope_method, path = scope.removeprefix("url:").split("|")
+                pattern = re.sub(r":\w+", r"[^/]+", path.removeprefix("/api/v1/"))
+                if scope_method == method and re.fullmatch(pattern, endpoint):
+                    return True
+            return False
+
+        with patch("canvasapi.requester.Requester.request", side_effect=request), \
+                self.app.test_request_context():
+            g.offering = Offering.query.filter_by(canvas_id=CS61A).one()
+            canvas_service.get_roster("token")
+        self.assertEqual(requested, [("GET", f"courses/{CS61A}"), ("GET", f"courses/{CS61A}/search_users")])
+        for method, endpoint in requested:
+            self.assertTrue(has_scope(method, endpoint), f"No scope for {method} {endpoint}")

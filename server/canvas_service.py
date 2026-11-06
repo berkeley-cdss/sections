@@ -12,7 +12,8 @@ SCOPES = [
     "url:GET|/api/v1/users/:user_id/courses",
     "url:GET|/api/v1/users/:user_id/profile",
     "url:GET|/api/v1/courses/:course_id/enrollments",
-    "url:GET|/api/v1/courses/:course_id/users",
+    # Course.get_users (get_roster) calls search_users, not courses/:course_id/users.
+    "url:GET|/api/v1/courses/:course_id/search_users",
     "url:GET|/api/v1/accounts/:account_id/users",
 ]
 
