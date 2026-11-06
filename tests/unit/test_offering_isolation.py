@@ -12,9 +12,15 @@ class OfferingIsolationTests(CourseTestCase):
         # The error handler reports the missing section as a 404.
         self.assertEqual(self.api("claim_section", section_id=str(self.data8_section_id)).status_code, 404)
         self.assertIsNone(db.session.get(Section, self.data8_section_id).staff_id)
-        # Not enrolled in DATA 8, so its pages and APIs are forbidden.
-        self.assertEqual(self.api("refresh_state", DATA8).status_code, 403)
-        self.assertEqual(self.get(f"/offerings/{DATA8}/").status_code, 403)
+        # Not enrolled in DATA 8, so its pages and APIs are forbidden, saying how
+        # someone just added can get in.
+        how_to_get_in = "accept the invitation in bCourses, then log out of Sections and sign in again."
+        response = self.api("refresh_state", DATA8)
+        self.assertEqual(response.status_code, 403)
+        self.assertTrue(response.get_json()["message"].endswith(how_to_get_in))
+        response = self.get(f"/offerings/{DATA8}/")
+        self.assertEqual(response.status_code, 403)
+        self.assertIn(how_to_get_in, response.get_data(as_text=True))
 
     def test_one_person_in_two_offerings_sees_each_separately(self):
         known = self.enroll_known_in_data8()
