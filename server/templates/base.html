@@ -40,7 +40,11 @@
                   {{ current_user.name }}
                 </a>
                 <ul class="dropdown-menu dropdown-menu-end" data-bs-theme="light" aria-labelledby="auth-menu">
-                  <li><a class="dropdown-item" href="{{ url_for('logout') }}">Log Out</a></li>
+                  <li>
+                    <form method="post" action="{{ url_for('logout') }}">
+                      <button type="submit" class="dropdown-item">Log Out</button>
+                    </form>
+                  </li>
                 </ul>
               </li>
             {% else %}

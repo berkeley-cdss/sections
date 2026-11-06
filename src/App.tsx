@@ -167,7 +167,12 @@ function CourseApp({ messages, setMessages }: CourseAppProps): React.ReactNode {
               </Nav.Link>
               {state.currentUser != null ? (
                 <NavDropdown title={state.currentUser.name} active align="end">
-                  <NavDropdown.Item href="/logout/">Log out</NavDropdown.Item>
+                  {/* A form post, so other sites can't sign users out with a link. */}
+                  <form method="post" action="/logout/">
+                    <NavDropdown.Item as="button" type="submit">
+                      Log out
+                    </NavDropdown.Item>
+                  </form>
                 </NavDropdown>
               ) : null}
             </Nav>
