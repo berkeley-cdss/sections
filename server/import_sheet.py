@@ -241,7 +241,7 @@ def import_sections_from_url(url: str):
     except Exception:
         raise Failure(
             "Unable to read spreadsheet. Make sure to put your data in a sheet named 'Sections' "
-            "and ensure the sheet is visible to anyone with the link."
+            "and share the sheet with the app's service account (Viewer access is enough)."
         )
 
     return import_sections(iter(reader))
@@ -308,7 +308,7 @@ def import_enrollment_from_url(url: str):
     except Exception:
         raise Failure(
             "Unable to read spreadsheet. Make sure to put your data in a sheet named 'Enrollment' "
-            "and ensure the sheet is visible to anyone with the link."
+            "and share the sheet with the app's service account (Viewer access is enough)."
         )
 
     import_enrollment(iter(reader))
