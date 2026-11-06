@@ -157,6 +157,22 @@ def can_teach_here(user: User) -> bool:
     return get_course() in user.staff_offerings
 
 
+def current_canvas_staff() -> dict[str, bool] | None:
+    """The course's current staff in Canvas (see canvas_service.get_course_staff),
+    asked with the signed-in admin's token, or None without a current token.
+
+    can_teach_here goes by Canvas roles saved at someone's last sign-in, which
+    can be out of date: last semester's student may be on staff in a course
+    that's new since."""
+    access_token = current_token(current_user)
+    if access_token is None:
+        return None
+    try:
+        return canvas_service.get_course_staff(access_token)
+    except (InvalidAccessToken, Unauthorized):
+        return None
+
+
 def add_student_helper(student: User, target_section: Section):
     # Only the target's offering matters; the person may be in other offerings too.
     sections = student.sections_in(target_section.course)
@@ -588,7 +604,9 @@ def create_state_client(app: flask.Flask):
     @api
     @admin_required
     def list_staff():
-        """Everyone who can be assigned a section here (see can_teach_here)."""
+        """Everyone who can be assigned a section here: by can_teach_here, plus
+        anyone in Sections whom Canvas lists as staff now. Without a current
+        Canvas token, or if Canvas fails, only the former."""
         canvas_key = f'"{get_canvas_course_id()}"'
         candidates = User.query.filter(
             set_contains(User.staff_offerings, get_course())
@@ -596,10 +614,17 @@ def create_state_client(app: flask.Flask):
             # courses; can_teach_here checks their role there.
             | db.cast(User.canvas_courses, db.Text).contains(canvas_key, autoescape=True)
         ).all()
+        staff = {user for user in candidates if can_teach_here(user)}
+        try:
+            canvas_staff = current_canvas_staff()
+        except Exception:
+            current_app.logger.exception("list_staff couldn't get the course's staff from Canvas")
+            canvas_staff = None
+        if canvas_staff:
+            staff.update(User.query.filter(User.canvas_id.in_(list(canvas_staff))).all())
         return [
             {"id": str(user.id), "name": user.name, "email": user.email}
-            for user in sorted(candidates, key=lambda user: user.name.lower())
-            if can_teach_here(user)
+            for user in sorted(staff, key=lambda user: user.name.lower())
         ]
 
     @api
@@ -611,11 +636,24 @@ def create_state_client(app: flask.Flask):
         section = Section.query.filter_by(id=section_id, course=get_course()).one()
         if staff_id:
             staff = db.session.get(User, int(staff_id))
-            if staff is None or not can_teach_here(staff):
+            if staff is None:
                 raise Failure("That person isn't on staff in this course.")
-            if get_course() not in staff.staff_offerings:
-                # On staff in Canvas, but hasn't opened this course here since.
-                staff.set_role(get_course(), is_staff=True, is_admin=staff.canvas_roles_in(get_canvas_course_id())[1])
+            if can_teach_here(staff):
+                if get_course() not in staff.staff_offerings:
+                    # On staff in Canvas, but hasn't opened this course here since.
+                    staff.set_role(get_course(), is_staff=True,
+                                   is_admin=staff.canvas_roles_in(get_canvas_course_id())[1])
+            else:
+                # Their saved Canvas roles may be out of date; ask Canvas.
+                if staff.canvas_id is None:
+                    raise Failure("That person isn't on staff in this course.")
+                canvas_staff = current_canvas_staff()
+                if canvas_staff is None:
+                    raise Failure("Checking that this person is on staff needs a current Canvas sign-in. "
+                                  "Log out and sign in with Canvas again, then retry.")
+                if staff.canvas_id not in canvas_staff:
+                    raise Failure("That person isn't on staff in this course.")
+                staff.set_role(get_course(), is_staff=True, is_admin=canvas_staff[staff.canvas_id])
             section.staff = staff
         else:
             section.staff = None
