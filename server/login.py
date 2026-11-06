@@ -146,8 +146,10 @@ def create_login_client(app: flask.Flask):
             return None
         user = db.session.get(User, user_id)
         if user is not None and in_offering() and not sync_offering_role(user):
-            abort(403, "You aren't enrolled in this course on bCourses. If you just "
-                       "enrolled, sign out and sign in again.")
+            # Sign-in only reads active enrollments, so someone just added to the
+            # course must accept the bCourses invitation before signing in again.
+            abort(403, "You aren't enrolled in this course on bCourses. If you were just added, "
+                       "accept the invitation in bCourses, then log out of Sections and sign in again.")
         return user
 
     @login_manager.unauthorized_handler

@@ -6,10 +6,11 @@ from typing import List, Iterator
 
 from zoneinfo import ZoneInfo
 
+from server.course_staff import StaffCheck
 from server.offering import get_course
 from server.google_sheets import read_spreadsheet
 from dataclasses import asdict, dataclass, field, fields
-from server.models import Failure, Section, check_fits, db, find_or_add_person, offering_member, user_section
+from server.models import Failure, Section, User, check_fits, db, find_or_add_person, offering_member, user_section, with_email
 
 # Sample Spreadsheet Link: https://docs.google.com/spreadsheets/d/1WL7gXiBxPe6aUFBKfEOVS6iY27ITy9mARupLoJX-ouE/edit?usp=sharing
 pst = ZoneInfo("US/Pacific")
@@ -47,6 +48,22 @@ def parse_time_string(day, time, label="Time"):
         second=sec,
         tzinfo=pst
     ).timestamp())
+
+
+def section_staff(email: str, name: str, row_number: int, staff_check: StaffCheck) -> User:
+    """The staff member a row of the Sections sheet assigns its section to."""
+    user = with_email(email)
+    if user is None or (user.canvas_id is None and not user.is_member_of(get_course())):
+        # Nobody has signed in with this email, and it isn't in this course, so
+        # there's no role to check: take the sheet's word for it.
+        user = find_or_add_person(email, name)
+        user.set_role(get_course(), is_staff=True)
+        return user
+    try:
+        staff_check.check(user, email)
+    except Failure as failure:
+        raise Failure(f"Row {row_number}: {failure}")
+    return user
 
 
 def parse_section_times(day, start, end):
@@ -159,6 +176,7 @@ def import_sections(data: Iterator):
         row_keys.append(section_key(row[header.type_index], start_time, end_time, row[header.location_index]))
     rows_per_key = {key: row_keys.count(key) for key in row_keys}
     matched = set()
+    staff_check = StaffCheck()
     added = updated = 0
 
     for row_number, (row, key) in enumerate(zip(rows, row_keys), start=2):
@@ -177,10 +195,7 @@ def import_sections(data: Iterator):
             raise Failure(f"Unknown boolean value: {can_self_enroll}")
         can_self_enroll = can_self_enroll == "true"
 
-        staff = offering_member(email=email)
-        if staff is None:
-            staff = find_or_add_person(email, name)
-            staff.set_role(get_course(), is_staff=True)
+        staff = section_staff(email, name, row_number, staff_check)
 
         candidates = [s for s in existing.get(key, []) if s.id not in matched]
         if len(existing.get(key, [])) > 1 or rows_per_key[key] > 1:
@@ -235,6 +250,7 @@ def import_sections_from_url(url: str):
 def import_enrollment(data: Iterator):
     model = EnrollmentHeader()
     header = process_header(model, next(data))
+    staff_check = StaffCheck()
 
     for row_number, row in enumerate(data, start=2):
         student_email = row[header.student_email_index]
@@ -254,7 +270,11 @@ def import_enrollment(data: Iterator):
 
         staff = offering_member(email=staff_email)
         if staff is None:
-            raise Failure(f"Unable to import enrollment data for {student_email}! {staff_email} isn't on staff.")
+            raise Failure(f"Row {row_number}: {staff_email} isn't on staff in this course.")
+        try:
+            staff_check.check(staff, staff_email)
+        except Failure as failure:
+            raise Failure(f"Row {row_number}: {failure}")
 
         # Assumes that each section can be uniquely identified by the below parameters
         section = Section.query.filter_by(
