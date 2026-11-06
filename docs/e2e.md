@@ -10,7 +10,7 @@ The `E2E` workflow runs these tests on each push and pull request.
 |---|---|
 | `test_student.py` | A student sees their section, joins a discussion, switches labs, leaves a lab, and needs a section's enrollment code to join it |
 | `test_staff.py` | A TA starts a session and takes attendance, which the student then sees in their history. A teacher adds a student to a section's roster by email and removes another |
-| `test_admin.py` | An admin sets the staff page link that everyone sees in the nav bar, and stops students joining discussions. Students can't open the admin page |
+| `test_admin.py` | An admin sets the staff page link that everyone sees in the nav bar, stops students joining discussions, and syncs the course's students with bCourses. Students can't open the admin page |
 | `test_offerings.py` | A TA imports a course from Canvas. Signing out, then signing in from a course page, returns to that page |
 
 Everyone signs in through `/dev_login/` against the [fake Canvas](../README.md#fake-canvas), as Oski Bear

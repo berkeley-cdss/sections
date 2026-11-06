@@ -12,6 +12,8 @@ SCOPES = [
     "url:GET|/api/v1/users/:user_id/courses",
     "url:GET|/api/v1/users/:user_id/profile",
     "url:GET|/api/v1/courses/:course_id/enrollments",
+    # Course.get_users (get_roster) calls search_users, not courses/:course_id/users.
+    "url:GET|/api/v1/courses/:course_id/search_users",
     "url:GET|/api/v1/accounts/:account_id/users",
 ]
 
@@ -96,6 +98,25 @@ def get_course_staff(access_token: str) -> dict[str, bool]:
         is_admin = enrollment.type == "TeacherEnrollment" or enrollment.role == "Lead TA"
         staff[user_id] = staff.get(user_id, False) or is_admin
     return staff
+
+
+def get_roster(access_token: str) -> list[dict]:
+    """The current course's students on bCourses, including those who haven't
+    accepted their invitation yet: ``[{"canvas_id", "email", "name"}]``. The
+    email is the one Canvas shares (their primary email, as at sign-in), or
+    None if it shares none, and the name their display name. Waitlisted
+    students are included when bCourses enrolls them as students.
+
+    Unlike the enrollments endpoint, this lists each student once, however many
+    of the course's sections (lecture, lab, discussion) they're enrolled in,
+    and gives their email rather than their login (at Berkeley, a CalNet UID)."""
+    course = _client(access_token).get_course(get_canvas_course_id())
+    return [
+        {"canvas_id": str(user.id), "email": getattr(user, "email", None) or None,
+         "name": getattr(user, "short_name", None) or user.name}
+        for user in course.get_users(enrollment_type=["student"], enrollment_state=["active", "invited"],
+                                     include=["email"], per_page=100)
+    ]
 
 
 def get_student_from_email(email: str, access_token: str):
