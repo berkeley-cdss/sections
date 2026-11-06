@@ -265,7 +265,7 @@ def create_state_client(app: flask.Flask):
             "sections": [],
             "currentUser": None,
             "course": get_course_name(),
-            # Signed out, only what the sign-in page shows (#51).
+            # Signed out, only what the sign-in page shows.
             "config": {"message": config.message if config else ""},
             "serviceAccountEmail": None,
             "custom": None,

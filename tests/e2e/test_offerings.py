@@ -28,6 +28,8 @@ def test_signing_out_and_back_in(site):
 
     # Signed out, the course page asks to sign in, and signing in comes back to it.
     site.visit(f"{OFFERING}/lab")
+    assert site.has_text("Sign in to see lab sections.")
+    assert not site.has_text("has not yet set up")
     site.button("Sign in").click()
     site.wait(lambda: site.driver.current_url.startswith(f"{site.base_url}/dev_login/"))
     site.find(f'//button[@name="user_id"][@value="{STUDENT}"]').click()

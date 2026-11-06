@@ -118,7 +118,10 @@ export default function SectionTypePage({ sectionName, noun }: Props): React.Rea
               </Col>
             ) : null}
           </Row>
-          {typeSections.length === 0 ? (
+          {/* Signed out, the server sends no sections, so don't claim there are none. */}
+          {state.currentUser == null ? (
+            <p>Sign in to see {noun} sections.</p>
+          ) : typeSections.length === 0 ? (
             <ReactMarkdown>{`Course staff has not yet set up ${noun} sections.`}</ReactMarkdown>
           ) : null}
           {state.currentUser?.isStaff
