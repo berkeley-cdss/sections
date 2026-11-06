@@ -22,7 +22,7 @@ from server import canvas_service
 from server.canvas_tokens import current_token
 from server.api_keys import audit_log, authenticate, create_key, init_api_keys, record_use, using_api_key
 from server.login import sync_offering_role
-from server.course_staff import add_staff_role, can_teach_here
+from server.course_staff import StaffCheck, can_teach_here
 from server.offering import OFFERING_URL_PREFIX, get_canvas_course_id, get_course, get_course_name, load_offering
 from server.import_sheet import check_capacity, import_sections_from_url, import_enrollment_from_url, parse_capacity
 
@@ -575,7 +575,9 @@ def create_state_client(app: flask.Flask):
     @api
     @admin_required
     def list_staff():
-        """Everyone who can be assigned a section here (see can_teach_here)."""
+        """Everyone who can be assigned a section here: by can_teach_here, plus
+        anyone in Sections whom Canvas lists as staff now. If Canvas can't be
+        asked (e.g. no current Canvas token), only the former."""
         canvas_key = f'"{get_canvas_course_id()}"'
         candidates = User.query.filter(
             set_contains(User.staff_offerings, get_course())
@@ -583,10 +585,16 @@ def create_state_client(app: flask.Flask):
             # courses; can_teach_here checks their role there.
             | db.cast(User.canvas_courses, db.Text).contains(canvas_key, autoescape=True)
         ).all()
+        staff = {user for user in candidates if can_teach_here(user)}
+        try:
+            canvas_staff = StaffCheck().canvas_staff()
+        except Failure:
+            canvas_staff = {}  # e.g. no current Canvas token; StaffCheck logs unexpected errors
+        if canvas_staff:
+            staff.update(User.query.filter(User.canvas_id.in_(list(canvas_staff))).all())
         return [
             {"id": str(user.id), "name": user.name, "email": user.email}
-            for user in sorted(candidates, key=lambda user: user.name.lower())
-            if can_teach_here(user)
+            for user in sorted(staff, key=lambda user: user.name.lower())
         ]
 
     @api
@@ -598,9 +606,9 @@ def create_state_client(app: flask.Flask):
         section = Section.query.filter_by(id=section_id, course=get_course()).one()
         if staff_id:
             staff = db.session.get(User, int(staff_id))
-            if staff is None or not can_teach_here(staff):
+            if staff is None:
                 raise Failure("That person isn't on staff in this course.")
-            add_staff_role(staff)
+            StaffCheck().check(staff, staff.email)
             section.staff = staff
         else:
             section.staff = None

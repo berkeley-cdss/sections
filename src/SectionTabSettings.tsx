@@ -42,7 +42,7 @@ const settings: Array<{ key: SettingsKey; label: string; tooltip: string }> = [
     key: "staff",
     label: "Staff Member",
     tooltip:
-      "TAs and teachers in this course on bCourses who have signed in to Sections, plus anyone listed in an imported Sections sheet who hasn't signed in yet.",
+      "TAs and teachers in this course on bCourses who have signed in to Sections, plus anyone listed in an imported Sections sheet who hasn't signed in yet. If you signed in over an hour ago, sign in again to include TAs who haven't signed in since joining this course.",
   },
   { key: "capacity", label: "Capacity", tooltip: "At least the number of students enrolled (Ex: 35)" },
   { key: "location", label: "Location", tooltip: "Any text (Ex: Wheeler 150)" },
