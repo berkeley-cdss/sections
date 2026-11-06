@@ -54,8 +54,11 @@ class SectionSettingsTests(CourseTestCase):
         section_id = str(self.section_id)
         response = self.api("update_section_staff", section_id=section_id, staff_id=str(other.id)).get_json()
         self.assertEqual(response["data"]["staff"]["email"], "other@test")
-        response = self.api("update_section_staff", section_id=section_id, staff_id=str(self.known_id)).get_json()
-        self.assertFalse(response["success"])  # a student, not staff
+        self.authorize()
+        with patch("server.state.canvas_service.get_course_staff", return_value={"1": True}):
+            response = self.api("update_section_staff", section_id=section_id, staff_id=str(self.known_id)).get_json()
+        # A student, not staff, even asking Canvas.
+        self.assertEqual(response["message"], "known@test isn't on staff in this course.")
         response = self.api("update_section_staff", section_id=section_id, staff_id="").get_json()
         self.assertIsNone(response["data"]["staff"])
 
@@ -94,10 +97,12 @@ class SectionSettingsTests(CourseTestCase):
         self.assertEqual(response["data"]["staff"]["email"], "new-ta@test")
         db.session.remove()
         self.assertIn("cs61a", db.session.get(User, new_ta_id).staff_offerings)
+        self.authorize()
         for email in ("gone-ta@test", "data8-ta@test", "admin@test"):
-            response = self.api("update_section_staff", section_id=str(self.section_id),
-                                staff_id=str(User.query.filter_by(email=email).one().id)).get_json()
-            self.assertFalse(response["success"])
+            with patch("server.state.canvas_service.get_course_staff", return_value={"1": True}):
+                response = self.api("update_section_staff", section_id=str(self.section_id),
+                                    staff_id=str(User.query.filter_by(email=email).one().id)).get_json()
+            self.assertEqual(response["message"], f"{email} isn't on staff in this course.")
 
     def test_section_times_must_be_valid_and_end_after_they_start(self):
         self.make_staff_admin()
@@ -166,6 +171,15 @@ class StaffPickerCanvasTests(CourseTestCase):
         self.assertIn("cs61a", returning.staff_offerings)
         self.assertNotIn("cs61a", returning.admin_offerings)
 
+    def test_assigned_staff_stay_staff_at_their_next_request(self):
+        self.authorize()
+        with self.canvas_staff({"77": False}):
+            self.assertTrue(self.assign_returning()["success"])
+        returning = db.session.get(User, self.returning_id)
+        self.assertEqual(returning.canvas_roles_in(CS61A), (True, False))
+        self.sign_in(returning)
+        self.assertTrue(self.api("refresh_state").get_json()["data"]["currentUser"]["isStaff"])
+
     def test_lead_tas_become_admins(self):
         self.authorize()
         with self.canvas_staff({"77": True}):
@@ -178,13 +192,14 @@ class StaffPickerCanvasTests(CourseTestCase):
         with self.canvas_staff({"1": True}):
             self.assertEqual(self.staff_emails(), ["staff@test"])
             body = self.assign_returning()
-        self.assertEqual(body, {"success": False, "message": "That person isn't on staff in this course."})
+        self.assertEqual(body, {"success": False, "message": "returning@test isn't on staff in this course."})
 
     def test_canvas_is_not_asked_to_assign_people_saved_roles_show(self):
         other = User(email="other@test", name="Other")
         other.set_role("cs61a", is_staff=True)
         db.session.add(other)
         db.session.commit()
+        self.authorize()  # so Canvas could be asked
         with self.canvas_staff({}) as lookup:
             body = self.api("update_section_staff", section_id=str(self.section_id),
                             staff_id=str(other.id)).get_json()
@@ -201,13 +216,13 @@ class StaffPickerCanvasTests(CourseTestCase):
                     body = self.assign_returning()
                 lookup.assert_not_called()
                 self.assertFalse(body["success"])
-                self.assertIn("needs a current Canvas sign-in", body["message"])
+                self.assertIn("needs a recent Canvas sign-in", body["message"])
 
     def test_a_rejected_token_counts_as_none(self):
         self.authorize()
         with self.canvas_staff(side_effect=InvalidAccessToken("revoked")):
             self.assertEqual(self.staff_emails(), ["staff@test"])
-            self.assertIn("needs a current Canvas sign-in", self.assign_returning()["message"])
+            self.assertIn("needs a recent Canvas sign-in", self.assign_returning()["message"])
 
     def test_the_list_still_loads_if_canvas_fails(self):
         self.authorize()

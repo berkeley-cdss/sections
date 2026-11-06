@@ -22,6 +22,7 @@ from server import canvas_service
 from server.canvas_tokens import current_token
 from server.api_keys import audit_log, authenticate, create_key, init_api_keys, record_use, using_api_key
 from server.login import sync_offering_role
+from server.course_staff import StaffCheck, can_teach_here
 from server.offering import OFFERING_URL_PREFIX, get_canvas_course_id, get_course, get_course_name, load_offering
 from server.import_sheet import check_capacity, import_sections_from_url, import_enrollment_from_url, parse_capacity
 
@@ -141,36 +142,6 @@ def clean_url(label: str, value, column) -> str | None:
     if not ok or re.search(r"\s", value):
         raise Failure(f"{label} must be a web address starting with https:// or http://")
     return value
-
-
-def can_teach_here(user: User) -> bool:
-    """Whether ``user`` can be assigned a section in this offering.
-
-    Their role in an offering is only brought up to date with Canvas when they
-    open its pages, so for anyone who has signed in, go by their Canvas roles
-    from their last sign-in instead. People imported from a spreadsheet who
-    haven't signed in only have their role here. Global admins count only
-    where they're on staff in Canvas, not in every offering."""
-    if user.canvas_id is not None:
-        roles = user.canvas_roles_in(get_canvas_course_id())
-        return roles is not None and roles[0]
-    return get_course() in user.staff_offerings
-
-
-def current_canvas_staff() -> dict[str, bool] | None:
-    """The course's current staff in Canvas (see canvas_service.get_course_staff),
-    asked with the signed-in admin's token, or None without a current token.
-
-    can_teach_here goes by Canvas roles saved at someone's last sign-in, which
-    can be out of date: last semester's student may be on staff in a course
-    that's new since."""
-    access_token = current_token(current_user)
-    if access_token is None:
-        return None
-    try:
-        return canvas_service.get_course_staff(access_token)
-    except (InvalidAccessToken, Unauthorized):
-        return None
 
 
 def add_student_helper(student: User, target_section: Section):
@@ -605,8 +576,8 @@ def create_state_client(app: flask.Flask):
     @admin_required
     def list_staff():
         """Everyone who can be assigned a section here: by can_teach_here, plus
-        anyone in Sections whom Canvas lists as staff now. Without a current
-        Canvas token, or if Canvas fails, only the former."""
+        anyone in Sections whom Canvas lists as staff now. If Canvas can't be
+        asked (e.g. no current Canvas token), only the former."""
         canvas_key = f'"{get_canvas_course_id()}"'
         candidates = User.query.filter(
             set_contains(User.staff_offerings, get_course())
@@ -616,10 +587,9 @@ def create_state_client(app: flask.Flask):
         ).all()
         staff = {user for user in candidates if can_teach_here(user)}
         try:
-            canvas_staff = current_canvas_staff()
-        except Exception:
-            current_app.logger.exception("list_staff couldn't get the course's staff from Canvas")
-            canvas_staff = None
+            canvas_staff = StaffCheck().canvas_staff()
+        except Failure:
+            canvas_staff = {}  # e.g. no current Canvas token; StaffCheck logs unexpected errors
         if canvas_staff:
             staff.update(User.query.filter(User.canvas_id.in_(list(canvas_staff))).all())
         return [
@@ -638,22 +608,7 @@ def create_state_client(app: flask.Flask):
             staff = db.session.get(User, int(staff_id))
             if staff is None:
                 raise Failure("That person isn't on staff in this course.")
-            if can_teach_here(staff):
-                if get_course() not in staff.staff_offerings:
-                    # On staff in Canvas, but hasn't opened this course here since.
-                    staff.set_role(get_course(), is_staff=True,
-                                   is_admin=staff.canvas_roles_in(get_canvas_course_id())[1])
-            else:
-                # Their saved Canvas roles may be out of date; ask Canvas.
-                if staff.canvas_id is None:
-                    raise Failure("That person isn't on staff in this course.")
-                canvas_staff = current_canvas_staff()
-                if canvas_staff is None:
-                    raise Failure("Checking that this person is on staff needs a current Canvas sign-in. "
-                                  "Log out and sign in with Canvas again, then retry.")
-                if staff.canvas_id not in canvas_staff:
-                    raise Failure("That person isn't on staff in this course.")
-                staff.set_role(get_course(), is_staff=True, is_admin=canvas_staff[staff.canvas_id])
+            StaffCheck().check(staff, staff.email)
             section.staff = staff
         else:
             section.staff = None

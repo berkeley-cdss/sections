@@ -84,12 +84,13 @@ def get_user_courses(user_id, access_token: str) -> dict:
 
 
 def get_course_staff(access_token: str) -> dict[str, bool]:
-    """The current course's staff in Canvas now: ``{str(canvas user id): is_admin}``,
-    counting TAs and Teachers as staff and Teachers and Lead TAs as admins, as
-    get_user_courses does."""
+    """The current course's staff in Canvas now: ``{str(canvas user id): is_admin}``.
+    As in get_user_courses, only active enrollments count, TAs and Teachers are
+    staff, and Teachers and Lead TAs are admins."""
     staff = {}
     course = _client(access_token).get_course(get_canvas_course_id())
-    for enrollment in course.get_enrollments(type=["TaEnrollment", "TeacherEnrollment"]):
+    for enrollment in course.get_enrollments(type=["TaEnrollment", "TeacherEnrollment"], state=["active"],
+                                             per_page=100):
         user_id = str(enrollment.user["id"])
         is_admin = enrollment.type == "TeacherEnrollment" or enrollment.role == "Lead TA"
         staff[user_id] = staff.get(user_id, False) or is_admin
