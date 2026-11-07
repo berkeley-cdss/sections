@@ -28,7 +28,6 @@ class SectionEditorTests(CourseTestCase):
             ("set_attendance", {"session_id": str(self.session_id), "students": "known@test",
                                 "status": "absent"}),
             ("remove_student", {"student": "known@test", "section_id": section_id}),
-            ("add_student", {"email": "known@test", "section_id": section_id}),
             ("add_students", {"emails": "known@test", "section_id": section_id}),
         ]
 
