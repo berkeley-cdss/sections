@@ -12,7 +12,6 @@ SCOPES = [
     "url:GET|/api/v1/users/:user_id/courses",
     "url:GET|/api/v1/users/:user_id/profile",
     "url:GET|/api/v1/courses/:course_id/enrollments",
-    "url:GET|/api/v1/accounts/:account_id/users",
 ]
 
 # Enrollment types as the user courses endpoint reports them.
