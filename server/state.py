@@ -722,7 +722,10 @@ def create_state_client(app: flask.Flask):
             roster = canvas_service.get_roster(access_token)
         except InvalidAccessToken:
             raise sign_in_again
-        except (Unauthorized, Forbidden):
+        except (Unauthorized, Forbidden) as e:
+            # Canvas says why: "Insufficient scopes on access token" (the developer
+            # key) or "user not authorized to perform that action" (their role).
+            current_app.logger.warning("Canvas refused the course's students: %s", e)
             raise Failure("Your bCourses account can't see this course's students, so Sections can't sync them.")
         except Exception:
             current_app.logger.exception("Couldn't get the course's students from Canvas")
