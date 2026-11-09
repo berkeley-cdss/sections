@@ -6,6 +6,8 @@ from typing import List, Iterator
 
 from zoneinfo import ZoneInfo
 
+from flask import current_app
+
 from server.course_staff import StaffCheck
 from server.offering import get_course
 from server.google_sheets import read_spreadsheet
@@ -14,6 +16,15 @@ from server.models import Failure, Section, User, check_fits, db, find_or_add_pe
 
 # Sample Spreadsheet Link: https://docs.google.com/spreadsheets/d/1WL7gXiBxPe6aUFBKfEOVS6iY27ITy9mARupLoJX-ouE/edit?usp=sharing
 pst = ZoneInfo("US/Pacific")
+
+
+def sheet_read_error(sheet_name: str) -> str:
+    email = current_app.config.get("GOOGLE_SERVICE_ACCOUNT_EMAIL")
+    account = f"the app's service account ({email})" if email else "the app's service account"
+    return (
+        f"Unable to read spreadsheet. Make sure to put your data in a sheet named '{sheet_name}' "
+        f"and share the sheet with {account}. Viewer access is enough."
+    )
 
 
 DAYS = ["M", "T", "W", "Th", "F"]
@@ -239,10 +250,7 @@ def import_sections_from_url(url: str):
             sheet_name="Sections",
         )
     except Exception:
-        raise Failure(
-            "Unable to read spreadsheet. Make sure to put your data in a sheet named 'Sections' "
-            "and ensure the sheet is visible to anyone with the link."
-        )
+        raise Failure(sheet_read_error("Sections"))
 
     return import_sections(iter(reader))
 
@@ -306,9 +314,6 @@ def import_enrollment_from_url(url: str):
             sheet_name="Enrollment",
         )
     except Exception:
-        raise Failure(
-            "Unable to read spreadsheet. Make sure to put your data in a sheet named 'Enrollment' "
-            "and ensure the sheet is visible to anyone with the link."
-        )
+        raise Failure(sheet_read_error("Enrollment"))
 
     import_enrollment(iter(reader))

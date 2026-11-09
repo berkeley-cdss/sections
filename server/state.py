@@ -833,24 +833,6 @@ def create_state_client(app: flask.Flask):
 
     @api
     @staff_required
-    def add_student(email: str, section_id: str):
-        #this function is never called!! use add_students instead
-        section_id = int(section_id)
-        section = Section.query.filter_by(id=section_id, course=get_course()).one()
-        check_can_edit(section)
-        student = offering_member(email=email)
-        if student is None:
-            student = find_or_add_person(email, email)
-            student.set_role(get_course(), is_staff=False)
-
-        # for decoupling
-        add_student_helper(student, section)
-        db.session.commit()
-
-        return fetch_section(section_id=section_id)
-
-    @api
-    @staff_required
     def add_students(emails: str, section_id: str):
         section_id = int(section_id)
         section = Section.query.filter_by(id=section_id, course=get_course()).one()

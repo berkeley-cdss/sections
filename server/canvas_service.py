@@ -14,7 +14,6 @@ SCOPES = [
     "url:GET|/api/v1/courses/:course_id/enrollments",
     # Course.get_users (get_roster) calls search_users, not courses/:course_id/users.
     "url:GET|/api/v1/courses/:course_id/search_users",
-    "url:GET|/api/v1/accounts/:account_id/users",
 ]
 
 # Enrollment types as the user courses endpoint reports them.
