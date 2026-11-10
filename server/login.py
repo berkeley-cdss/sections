@@ -24,8 +24,10 @@ DEFAULT_SIGN_IN_MAX_AGE = 12 * 60 * 60
 
 
 def _safe_next(target):
-    # Only redirect back to paths on this site.
-    if target and target.startswith("/") and not target.startswith("//"):
+    # Only redirect back to paths on this site. Browsers read a backslash as a slash and drop tabs
+    # and newlines, so /\evil.com and /<tab>/evil.com both go to //evil.com: refuse those too.
+    if (target and target.startswith("/") and not target.startswith("//") and "\\" not in target
+            and not any(ord(c) < 32 or ord(c) == 127 for c in target)):
         return target
     return None
 
