@@ -13,7 +13,7 @@ The `E2E` workflow runs these tests on each push and pull request.
 | `test_admin.py` | An admin sets the staff page link that everyone sees in the nav bar, and stops students joining discussions. Students can't open the admin page |
 | `test_offerings.py` | A TA imports a course from Canvas. Signing out, then signing in from a course page, returns to that page |
 
-Everyone signs in through `/dev_login/` against the [fake Canvas](../README.md#fake-canvas), as Oski Bear
+Everyone signs in through `/dev_login/` against the [mock Canvas](developers.md#mock-canvas), as Oski Bear
 (teacher), Yu Long (TA) or Jimmy Xu (student).
 
 ## How they work

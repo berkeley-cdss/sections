@@ -24,7 +24,7 @@ function formatTime(seconds: number | null) {
   return seconds == null ? "Never" : moment.unix(seconds).format("MMM D, YYYY h:mm a");
 }
 
-// Course admins' keys for this course's API (/api/sudo/<name>), see "API" in the README.
+// Course admins' keys for this course's API (/api/sudo/<name>), see docs/api.md.
 export default function ApiKeysTab() {
   const [keys, setKeys] = useState<Array<ApiKey> | null>(null);
   const [name, setName] = useState("");
