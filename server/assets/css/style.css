@@ -136,6 +136,26 @@ p a {
   padding: 20px 10px 5px 10px;
 }
 
+/* As in seating: a borderless button holding a Bootstrap icon. */
+.icon-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4px 6px;
+  border: 0;
+  border-radius: 5px;
+  background: none;
+  color: inherit;
+  font-size: 1.4rem;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.icon-button:hover,
+.icon-button:focus-visible {
+  background-color: rgba(0, 0, 0, 0.12);
+}
+
 .offering-term {
   min-width: 4.5em;
   color: #424242;

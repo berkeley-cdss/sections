@@ -70,5 +70,5 @@ def seed(canvas_course_id: int):
 
 if __name__ == "__main__":
     if len(sys.argv) != 2:
-        sys.exit("usage: python3 -m server.seed <canvas course id>  (e.g. 157 for Mango 101 on the sandbox)")
+        sys.exit("usage: python3 -m server.seed <canvas course id>  (e.g. 157 for \"Mango 101 (Deokpy Section)\" on the sandbox)")
     seed(int(sys.argv[1]))

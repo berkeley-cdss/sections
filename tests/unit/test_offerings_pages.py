@@ -65,6 +65,10 @@ class OfferingsPagesTests(CourseTestCase):
         self.make_cs61a_admin()
         page = self.get("/offerings").get_data(as_text=True)
         self.assertIn(f'action="/offerings/{CS61A}/remove"', page)
+        # As in seating, the button is a hide icon whose tooltip says so.
+        self.assertIn('aria-label="Hide CS 61A - LEC 001"', page)
+        self.assertIn('data-bs-title="Hide"', page)
+        self.assertIn('class="bi bi-eye-slash"', page)
 
         # Students, and staff of other courses, cannot.
         self.sign_in(self.known)

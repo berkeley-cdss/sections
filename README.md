@@ -1,135 +1,37 @@
 # Sections
 
+[![Tests](https://github.com/berkeley-cdss/sections/actions/workflows/test.yml/badge.svg)](https://github.com/berkeley-cdss/sections/actions/workflows/test.yml)
+[![E2E](https://github.com/berkeley-cdss/sections/actions/workflows/e2e.yml/badge.svg)](docs/e2e.md)
 [![A11y](https://github.com/berkeley-cdss/sections/actions/workflows/a11y.yml/badge.svg)](docs/a11y.md)
 
+**Sections** is a web app for UC Berkeley courses to run their lab, discussion and tutoring sections, connected to bCourses (Canvas). Course staff set up sections, import them from a spreadsheet, manage rosters and take attendance. Students join sections and see their attendance history.
 
-## Local Development Set Up
+To use Sections, visit [sections.data8.org](https://sections.data8.org).
 
-Requires Python 3.14 and Node 24 (`mise install` picks both up from `mise.toml`). The frontend is React 19 and TypeScript, built with Vite.
+## Documentation
 
-1. Copy `.env.example` to `.env`. Never commit `.env`. By default the app uses a fake Canvas, so no Canvas credentials are needed (see [Fake Canvas](#fake-canvas)); to use the Canvas sandbox instead, set `MOCK_CANVAS=false` and fill in its `CANVAS_CLIENT_ID` and `CANVAS_CLIENT_SECRET` (ask a maintainer).
-2. Create a virtual environment and install the server dependencies:
-   ```
-   python3 -m venv venv
-   source venv/bin/activate
-   pip install -r server/requirements.txt
-   ```
-3. Install the frontend dependencies with `yarn install`.
-4. Create or update the local database with `flask --app server.main db upgrade` from the repository root. `server/` is a package, so run the app's commands from the root, as below.
-5. Run both with `yarn dev`, or separately: the backend with `python3 -m server.main` (port 8000) and the frontend with `yarn start` (the Vite dev server on port 3000, which forwards API calls, the login routes and `/offerings` to port 8000).
-6. Install the test dependencies with `pip install -r requirements-dev.txt`, then run the backend tests with `pytest` from the repository root (see [Tests](#tests)).
+- **[Developing Sections](docs/developers.md):** local setup, the mock Canvas and the Canvas sandbox, roles and sign-in, and sample data.
+- **[Testing](docs/testing.md):** unit tests, coverage, and the [end to end tests](docs/e2e.md) and [accessibility audit](docs/a11y.md).
+- **[Database Migrations](docs/migrations.md):** changing the schema, and why PR previews can't run migrations.
+- **[API](docs/api.md):** calling Sections from scripts with a course API key.
+- **[Contributing](CONTRIBUTING.md):** how to propose a change.
 
-## Tests
+## Quick Start
 
-Tests live in `tests/`, as in seating: `tests/unit/` holds tests that use Flask's test client against an in-memory SQLite database, `tests/e2e/` uses the app in a browser as students and staff do ([docs/e2e.md](docs/e2e.md)), and `tests/a11y/` audits every page's accessibility in a browser ([docs/a11y.md](docs/a11y.md)). The browser tests share their server, seed data and helpers (`tests/browser.py`). `server/` is a package, and `pytest.ini` puts the repository root on the import path, so tests import the app's modules the way the app does (`from server.models import db`). `pytest` from the repository root runs the unit tests, `pytest tests/e2e` the end to end tests, and `pytest tests/a11y` the a11y audit. CI runs each on Python 3.14, the version the Dockerfile uses: the unit tests in `.github/workflows/test.yml`, which adds a coverage report to the run's summary page, and the browser tests in `e2e.yml` and `a11y.yml`.
-
-Tests build the app with the same `create_app` (`server/application.py`) that `server/main.py` uses, given a test config, so they test the app as it's deployed:
-- New tests can be plain functions using the pytest fixtures in `tests/conftest.py` (`app`, `client`), like seating's tests.
-- The existing tests are `unittest` classes built on `tests/unit/support.py`. `AppTestCase` gives an empty database and request helpers, and `CourseTestCase` adds two offerings, a staff member, a student and a lab in each.
-
-Put a test in the file for what it tests (`test_login.py`, `test_sheet_imports.py`, `test_section_settings.py`, ...), and add a file when nothing fits. Test files go in `tests/unit/` and are named `test_<subject>.py`, with test functions and methods named `test_<what it checks>`. `pytest` only looks in `tests/unit/`, so a test file anywhere else, such as `server/`, never runs, locally or in CI.
-
-CI uploads coverage of `server/` to [Codecov](https://app.codecov.io/gh/berkeley-cdss/sections), whose `codecov/project` check fails a PR that lowers coverage below main's (`codecov.yml`). Its PR comment also says how much of the PR's changed lines are tested. Separately, the tests job fails if coverage drops below 74%, its level when that minimum was set.
-
-## Authentication
-
-One deployment serves every bCourses course, with the same routes as seating. Users log in through Canvas OAuth (`/login/`, which returns to `/authorized/`), and `/offerings` lists their courses. Each course offering lives under `/offerings/<canvas course id>/`. Roles come from each Canvas enrollment at sign-in: Teachers and TAs are staff, and Teachers and Lead TAs are admins. Members of the `ADMIN_OVERRIDE_CANVAS_COURSE_ID` course are staff and admin everywhere. Someone added to a course after signing in needs to sign out and in again. Students are also added when an admin syncs the course with bCourses ("Sync bCourses" on the Admin page), which adds everyone on the course's bCourses roster, including students who haven't accepted their invitation, and removes students no longer on it from the course and its sections, keeping their attendance records.
-
-Course staff set up Sections for a course with "Import courses from Canvas" (`/offerings/new`). Offerings moved from the monorepo store their data under an old key (`cs61a`, `data8`, ...); link each one to its Canvas course with `flask --app server.main link-offering <canvas id> <key> "<name>"`, run from the repository root against that database.
-
-To sign in locally against the sandbox (`MOCK_CANVAS=false`), open `localhost:3000/offerings` and log in. This works on port 3000 if the sandbox developer key allows `http://localhost:3000/authorized/` as a redirect URI. Otherwise, log in at `localhost:8000/login/` instead, then go back to `localhost:3000`. A "template not found" error for course pages on port 8000 is expected, because the built frontend isn't served in development.
-
-### Fake Canvas
-
-As in seating, development uses a fake Canvas unless `MOCK_CANVAS=false`, so a fresh checkout can be signed into without any Canvas credentials, and tests can sign in without reaching Canvas. Logging in goes to `/dev_login/`, which lists the seeded users and their roles in each course; pick one to sign in as them. Their profiles, courses and enrollments are in `server/fake_canvas_data/` (the same users and courses as seating's, plus a teacher, Oski Bear, so that admin pages can be tried), and `server/fake_canvas.py` answers the Canvas calls in `server/canvas_service.py` from them. Staff can import those courses with "Import courses from Canvas" and add their students by email as usual. Staging and production never use the fake Canvas, whatever `MOCK_CANVAS` says, and `/dev_login/` only redirects home there.
-
-To try the sample sections with it, sign in as Oski Bear, then run `python3 -m server.seed 1234567` or the imports below with `--course 1234567`.
-
-### About the Sandbox
-
-The production Sections app is deployed on GCP Cloud Run and interacts with bCourses. To locally mock this setup without exposing the production Canvas API keys, we use a "sandbox" Canvas instance located at [ucberkeleysandbox.instructure.com](https://ucberkeleysandbox.instructure.com/). During onboarding to the sections app, you will be added as an admin to the sandbox Canvas instance where you can view the development API key and create new API keys as needed.
-
-**All development work should be done using the sandbox instance.** Access to bCourses should only be available in the production deployment once all testing with the sandbox is complete. You can do anything you'd like in the sandbox to simulate your desired testing environment (create courses, add students, specify user roles, etc.). You can make your own course, but we currently have a course  set up with users that can be found (after logging) by accessing the "Admin" button on the sidebar, then clicking "UC Berkeley Sandbox". Search through the courses for the one titled "Mango 101 (Deokpy Section)".
-
-### More About Accessing Canvas APIs
-
-Our wrapper for the Canvas API is `server/canvas_service.py`, which also lists the scopes the app requests at login. Those scopes must match the scopes on the app's Canvas developer key.
-
-bCourses API keys have strict scope and permissions. bCourses API keys should only be used for the exact purpose they were granted for. Specifically, the sections app API key should not be used by another app or for any purpose outside the approved scope for the sections app. If you need a new API key with broader scope or for a different app, please contact @pancakereport to discuss. The process for obtaining a new API key requires faculty or full time staff (like @pancakereport) support and working with RTL who manage bCourses.
-
-## Import Test Sections Locally
-
-1. Start the server and front end.
-2. Set up your sandbox course, either by signing in and using "Import courses from Canvas" on `localhost:3000/offerings`, or with `python3 -m server.seed 157` (157 is Mango 101 on the sandbox; this also adds demo sections).
-3. From the repository root, import example sections and enrollment into that course:
+Requires Python 3.14 and Node 24 (`mise install` picks both up from `mise.toml`). On Windows, use [WSL](https://learn.microsoft.com/en-us/windows/wsl/install). From the repository root:
 
 ```
-python3 -m server.import_locally --course 157 --type sections --file server/test_csvs/test_sections.csv
-python3 -m server.import_locally --course 157 --type enrollment --file server/test_csvs/disc_enrollment.csv
-python3 -m server.import_locally --course 157 --type enrollment --file server/test_csvs/lab_enrollment.csv
+cp .env.example .env
+python3 -m venv venv
+source venv/bin/activate
+pip install -r server/requirements.txt -r requirements-dev.txt
+yarn install
+flask --app server.main db upgrade
+yarn dev
 ```
 
-4. Open `localhost:3000/offerings/157/`; you should see the example sections.
+Then open `localhost:3000` and sign in as one of the mock Canvas's users. No Canvas credentials are needed. See [Developing Sections](docs/developers.md) for what each step does, and for using the Canvas sandbox.
 
-## Database Migrations
+## Canvas API Keys
 
-The schema is managed with Flask-Migrate (Alembic); migrations live in `server/migrations/versions`. To change the schema, edit `server/models.py`, then from the repository root:
-
-```
-flask --app server.main db migrate -m "describe the change"   # generates a migration; review and edit it
-flask --app server.main db upgrade                             # applies it to your local database
-```
-
-Commit the migration with the model change. Deployments with `RUN_MIGRATIONS=true` (staging and production) run `flask db upgrade` when they start; PR previews never do, because they share the staging database.
-
-### Migrations and PR previews
-
-Sections checks that the database's migration matches the code's latest migration (`server/schema_check.py`). While they differ, every page, API call and `/health` returns 503 with a message saying why, rather than failing on the first query that uses a missing column. The check is repeated at most once a minute.
-
-This means **a PR that adds a migration can't be tried on its preview.** The preview shares the staging database, which only gets the migration when the PR is merged and staging deploys, so the preview shows "This is a preview of PR #N, which adds a database migration… Merge the PR to see its changes on staging." Test such a PR locally (`flask --app server.main db upgrade` against your own database), then merge it and check staging.
-
-The reverse also happens: after another PR with a migration is merged, staging's database is ahead of a preview whose branch doesn't have that migration. The preview then says to merge main into the PR's branch, which redeploys the preview with the migration.
-
-Locally, the same check tells you to run `flask --app server.main db upgrade` when your database is behind, for example after pulling a new migration.
-
-## Import Sections from GCP
-1. Download the sections database to obtain a `.sql` file. Relevant Links [1](https://cloud.google.com/sql/docs/mysql/import-export/import-export-sql) and [2](https://cloud.google.com/storage/docs/downloading-objects).
-2. Likely the export uses MySQL syntax, so update it to SQLite.
-3. In the `server` directory, delete `app.db` and run `sqlite3 app.db < gcp-sections-export.sql`.
-
-## API
-Functions marked with the `@api` decorator are also exposed at `/offerings/<canvas course id>/api/sudo/<name>`, for scripts. Each request needs an API key, which a course admin (an instructor or Lead TA in bCourses) makes on the course's Admin page, under API Keys. A key:
-
-- works only in the course it was made in, and only while its owner is an admin there;
-- stops working if its owner hasn't signed in to Sections for 7 days (`API_KEY_ROLE_MAX_AGE`, in seconds), because bCourses roles are only read at sign-in. Signing in again starts it working;
-- runs the function as its owner, or as the course member whose `email` the request names; never as anyone outside the course;
-- can't list, create, revoke or rotate keys. Do that on the Admin page, where any admin can revoke any key in the course and rotate their own.
-
-Only a hash of each key is stored, so a key is shown once, when it's made. Every request made with a key is logged (`sections.api_keys`) with the key, its owner, the function and who it ran as. After 10 failed key attempts in 15 minutes, a client is refused (HTTP 429) until the window passes. Example request:
-
-```
-curl -X POST \
-  -H "Authorization: Bearer $SECTIONS_API_KEY" \
-  -H "Content-Type: application/json" \
-  -d '{
-        "email": "<staff>@berkeley.edu",
-        "args": {
-            "email": "<student>@berkeley.edu"
-        }
-      }' \
-  "https://<sections-host>/offerings/<canvas course id>/api/sudo/get_student_discussion_attendance"
-```
-
-Leave out `"email"` to run as the key's owner. Responses are `{"success": true, "data": ...}`, or `{"success": false, "message": ...}` with an HTTP error status when the key is refused.
-
-## Notes
-1. Use `yarn typecheck` (TypeScript) and `yarn lint` (ESLint); CI runs both.
-2. If you'd to see debugging logs while the server is up and running, the usual `print` statements will not work. Instead, a method that currently works is described in this [commit](https://github.com/Cal-CS-61A-Staff/berkeley-cs61a/commit/0e75b8798543c0edd68cc02d1d9c1a9389105087).
-3. If you run the app locally and sign in, you may need to update the local database to give yourself appropriate access levels to test the admin, staff, and student views. To assign yourself staff and admin access run the following (substituting your own email) *after* having already logged in:
-
-    ```
-    $ sqlite3 server/app.db
-    $ sqlite> UPDATE user SET is_staff = 1, is_admin = 1 WHERE email = '<example>@berkeley.edu';
-    $ sqlite> .exit
-    ```
-    If at any point you receive a error despite having mocked the proper permissions, you should clear your cookies at `localhost:3000` (Inspect page -> "Application" tab -> "Clear site data" button)
+The app's Canvas scopes are listed in `server/canvas_service.py`, and they must be a subset of the scopes on its Canvas developer key. bCourses API keys have strict scope and permissions, and should only be used for the exact purpose they were granted for. Specifically, the Sections API key should not be used by another app or for any purpose outside the approved scope for Sections. If you need to broaden the scope of the API key or create a new API key for a different app, contact @pancakereport to discuss. The process for obtaining a new API key requires faculty or full time staff support and a conversation with RTL, who manage bCourses. Test any change that needs a new scope against the [Canvas sandbox](docs/developers.md#canvas-sandbox) first.

@@ -51,6 +51,8 @@ class SecurityHeaderTests(AppTestCase):
                 # browsers apply form-action to the redirects after a post too, and a post made once
                 # the Canvas token has expired is redirected to Canvas to log in again
                 self.assertNotIn("form-action", policy)
+                # no other site can frame the pages to trick someone into clicking on them
+                self.assertEqual(policy["frame-ancestors"], "'none'")
                 self.assertEqual(response.headers["X-Content-Type-Options"], "nosniff")
 
     def test_templates_have_no_inline_script(self):

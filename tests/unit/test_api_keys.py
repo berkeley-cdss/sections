@@ -5,6 +5,7 @@ import time
 from server.api_keys import hash_key
 from server.models import ApiKey, User, db
 from tests.unit.support import CS61A, DATA8, CourseTestCase, canvas_course
+from tests.unit.test_dev_login import configured
 
 
 class ApiKeyTests(CourseTestCase):
@@ -155,6 +156,51 @@ class ApiKeyTests(CourseTestCase):
                              headers={"Authorization": f"Bearer {key}"},
                              environ_base={"REMOTE_ADDR": "10.0.0.2"})
         self.assertEqual(response.status_code, 200)
+
+    def fail_from(self, forwarded_for, times=10):
+        for _ in range(times):
+            response = self.post(f"/offerings/{CS61A}/api/sudo/refresh_state", json={},
+                                 headers={"Authorization": "Bearer sections_guess",
+                                          "X-Forwarded-For": forwarded_for})
+            self.assertEqual(response.status_code, 401)
+
+    def sudo_from(self, key, forwarded_for):
+        return self.post(f"/offerings/{CS61A}/api/sudo/refresh_state", json={},
+                         headers={"Authorization": f"Bearer {key}", "X-Forwarded-For": forwarded_for})
+
+    def test_reached_directly_clients_are_told_apart_by_the_last_forwarded_address(self):
+        key = self.create_key()
+        # Cloud Run appends the client's address; the spoofed entries before it vary.
+        self.fail_from("1.1.1.1, 203.0.113.1")
+        self.assertEqual(self.sudo_from(key, "9.9.9.9, 203.0.113.1").status_code, 429)
+        self.assertEqual(self.sudo_from(key, "203.0.113.2").status_code, 200)
+
+    def test_behind_a_load_balancer_clients_are_told_apart_by_the_entry_before_it(self):
+        self.app.config["TRUSTED_PROXY_HOPS"] = 1
+        key = self.create_key()
+        # Every request ends with the load balancer's address, 198.51.100.1.
+        self.fail_from("1.1.1.1, 203.0.113.1, 198.51.100.1")
+        self.assertEqual(self.sudo_from(key, "9.9.9.9, 203.0.113.1, 198.51.100.1").status_code, 429)
+        self.assertEqual(self.sudo_from(key, "203.0.113.2, 198.51.100.1").status_code, 200)
+
+    def test_a_stray_quote_does_not_hide_the_forwarded_address(self):
+        key = self.create_key()
+        self.fail_from('"x, 203.0.113.1')
+        self.assertEqual(self.sudo_from(key, '"y, 203.0.113.1').status_code, 429)
+        self.assertEqual(self.sudo_from(key, '"x, 203.0.113.2').status_code, 200)
+
+    def test_a_request_through_fewer_proxies_is_counted_by_its_oldest_entry(self):
+        self.app.config["TRUSTED_PROXY_HOPS"] = 2
+        key = self.create_key()
+        self.fail_from("203.0.113.1, 198.51.100.1")
+        self.assertEqual(self.sudo_from(key, "203.0.113.1, 198.51.100.2").status_code, 429)
+        self.assertEqual(self.sudo_from(key, "203.0.113.2, 198.51.100.1").status_code, 200)
+
+    def test_trusted_proxy_hops_must_not_be_negative(self):
+        self.assertEqual(configured()["TRUSTED_PROXY_HOPS"], 0)
+        self.assertEqual(configured(TRUSTED_PROXY_HOPS="1")["TRUSTED_PROXY_HOPS"], 1)
+        with self.assertRaises(RuntimeError):
+            configured(TRUSTED_PROXY_HOPS="-1")
 
     def test_signing_in_records_when_roles_were_read(self):
         before = int(time.time())
