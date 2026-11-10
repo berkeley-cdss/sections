@@ -31,6 +31,9 @@ DEFAULT_ROLE_MAX_AGE = 7 * 24 * 60 * 60
 # Kept per server instance, which is enough to slow guessing of 256-bit keys.
 DEFAULT_FAILURE_LIMIT = 10
 DEFAULT_FAILURE_WINDOW = 15 * 60
+# Proxies in front of Cloud Run that append to X-Forwarded-For: 0 when it's
+# reached directly, 1 behind a Google load balancer.
+DEFAULT_TRUSTED_PROXY_HOPS = 0
 
 # Every request made with a key is logged here. Its own handler, at INFO, so
 # the log doesn't depend on how the app's logger is configured under gunicorn.
@@ -63,9 +66,19 @@ def using_api_key() -> bool:
 
 
 def client_address() -> str:
-    # Cloud Run appends the client's address to X-Forwarded-For; anything
-    # before it came from the client and can't be trusted.
-    return request.access_route[-1] if request.access_route else (request.remote_addr or "")
+    """The address the failure limit counts against.
+
+    Each proxy appends the address it was reached from to X-Forwarded-For, so
+    Cloud Run's entry is last and each trusted proxy in front of it adds one
+    more. The client is the entry just before those; anything earlier came
+    from the client and can't be trusted.
+    """
+    route = request.access_route
+    if not route:
+        return request.remote_addr or ""
+    hops = current_app.config.get("TRUSTED_PROXY_HOPS", DEFAULT_TRUSTED_PROXY_HOPS)
+    # Fewer entries than proxies means the request skipped one; use the oldest.
+    return route[max(len(route) - 1 - hops, 0)]
 
 
 class FailureLimiter:

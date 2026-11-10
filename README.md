@@ -105,7 +105,7 @@ Functions marked with the `@api` decorator are also exposed at `/offerings/<canv
 - runs the function as its owner, or as the course member whose `email` the request names; never as anyone outside the course;
 - can't list, create, revoke or rotate keys. Do that on the Admin page, where any admin can revoke any key in the course and rotate their own.
 
-Only a hash of each key is stored, so a key is shown once, when it's made. Every request made with a key is logged (`sections.api_keys`) with the key, its owner, the function and who it ran as. After 10 failed key attempts in 15 minutes, a client is refused (HTTP 429) until the window passes. Example request:
+Only a hash of each key is stored, so a key is shown once, when it's made. Every request made with a key is logged (`sections.api_keys`) with the key, its owner, the function and who it ran as. After 10 failed key attempts in 15 minutes, a client is refused (HTTP 429) until the window passes. Clients are told apart by `X-Forwarded-For`, so behind a load balancer set `TRUSTED_PROXY_HOPS=1`; otherwise every request looks like it came from the load balancer, and 10 bad attempts from anyone lock out everyone. Example request:
 
 ```
 curl -X POST \

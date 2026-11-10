@@ -156,6 +156,32 @@ class ApiKeyTests(CourseTestCase):
                              environ_base={"REMOTE_ADDR": "10.0.0.2"})
         self.assertEqual(response.status_code, 200)
 
+    def fail_from(self, forwarded_for, times=10):
+        for _ in range(times):
+            response = self.post(f"/offerings/{CS61A}/api/sudo/refresh_state", json={},
+                                 headers={"Authorization": "Bearer sections_guess",
+                                          "X-Forwarded-For": forwarded_for})
+            self.assertEqual(response.status_code, 401)
+
+    def sudo_from(self, key, forwarded_for):
+        return self.post(f"/offerings/{CS61A}/api/sudo/refresh_state", json={},
+                         headers={"Authorization": f"Bearer {key}", "X-Forwarded-For": forwarded_for})
+
+    def test_reached_directly_clients_are_told_apart_by_the_last_forwarded_address(self):
+        key = self.create_key()
+        # Cloud Run appends the client's address; the spoofed entries before it vary.
+        self.fail_from("1.1.1.1, 203.0.113.1")
+        self.assertEqual(self.sudo_from(key, "9.9.9.9, 203.0.113.1").status_code, 429)
+        self.assertEqual(self.sudo_from(key, "203.0.113.2").status_code, 200)
+
+    def test_behind_a_load_balancer_clients_are_told_apart_by_the_entry_before_it(self):
+        self.app.config["TRUSTED_PROXY_HOPS"] = 1
+        key = self.create_key()
+        # Every request ends with the load balancer's address, 198.51.100.1.
+        self.fail_from("1.1.1.1, 203.0.113.1, 198.51.100.1")
+        self.assertEqual(self.sudo_from(key, "9.9.9.9, 203.0.113.1, 198.51.100.1").status_code, 429)
+        self.assertEqual(self.sudo_from(key, "203.0.113.2, 198.51.100.1").status_code, 200)
+
     def test_signing_in_records_when_roles_were_read(self):
         before = int(time.time())
         self.log_in_as("1", "staff@test", courses={str(CS61A): canvas_course("CS 61A", staff=True)})

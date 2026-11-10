@@ -4,7 +4,7 @@ import re
 import flask
 from dotenv import load_dotenv
 
-from server.api_keys import DEFAULT_ROLE_MAX_AGE
+from server.api_keys import DEFAULT_ROLE_MAX_AGE, DEFAULT_TRUSTED_PROXY_HOPS
 
 DEV_SQLITE_PATH = os.path.join(os.path.abspath(os.path.dirname(__file__)), "app.db")
 
@@ -85,6 +85,8 @@ def load_config(app: flask.Flask):
         GOOGLE_SERVICE_ACCOUNT_EMAIL=os.getenv("GOOGLE_SERVICE_ACCOUNT_EMAIL"),
         # How long an API key keeps working after its owner's last sign-in (api_keys.py).
         API_KEY_ROLE_MAX_AGE=int(os.getenv("API_KEY_ROLE_MAX_AGE") or DEFAULT_ROLE_MAX_AGE),
+        # Proxies in front of Cloud Run, so failed API key attempts are counted per client (api_keys.py).
+        TRUSTED_PROXY_HOPS=int(os.getenv("TRUSTED_PROXY_HOPS") or DEFAULT_TRUSTED_PROXY_HOPS),
         PERMANENT_SESSION_LIFETIME=7200,
         SESSION_COOKIE_HTTPONLY=True,
         SESSION_COOKIE_SECURE=not is_dev,
