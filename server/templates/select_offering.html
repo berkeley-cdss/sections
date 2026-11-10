@@ -13,8 +13,9 @@
     {% if removable %}
       {# a form, not seating's link, so that only a deliberate click removes it #}
       <form method="post" action="{{ url_for('remove_offering', canvas_id=offering.canvas_id) }}"
-            data-confirm="Remove this offering from Sections? Its sections and attendance are kept, and come back if it is imported again.">
-        <button type="submit" class="btn-close" aria-label="Remove {{ offering.name }}"></button>
+            data-confirm="Hide this offering? Its sections and attendance are kept, and come back if it is imported again.">
+        <button type="submit" class="icon-button" aria-label="Hide {{ offering.name }}"
+                data-bs-toggle="tooltip" data-bs-title="Hide"><i class="bi bi-eye-slash" aria-hidden="true"></i></button>
       </form>
     {% endif %}
   </li>
