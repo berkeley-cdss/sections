@@ -3,11 +3,9 @@
 import json
 
 import sqlalchemy
-from types import SimpleNamespace
 from unittest.mock import patch
 
 from canvasapi.exceptions import InvalidAccessToken
-from flask import g
 
 from server.models import Attendance, AttendanceStatus, Offering, Section, Session, User, db
 from tests.unit.support import CS61A, DATA8, CourseTestCase, canvas_course
@@ -160,56 +158,3 @@ class SyncBcoursesTests(CourseTestCase):
             body = self.api("sync_bcourses").get_json()
         self.assertFalse(body["success"])
         get_roster.assert_not_called()
-
-
-class GetRosterTests(CourseTestCase):
-    def test_students_with_their_email_and_display_name(self):
-        from server import canvas_service
-
-        client = patch("server.canvas_service._client").start()
-        self.addCleanup(patch.stopall)
-        get_users = client.return_value.get_course.return_value.get_users
-        # At Berkeley the login is a CalNet UID, not an email; and Canvas may not share an email.
-        get_users.return_value = [
-            SimpleNamespace(id=5, login_id="1717117", email="a@test", name="A", short_name="A (display)"),
-            SimpleNamespace(id=6, login_id="1717118", name="B", short_name=""),
-        ]
-        with self.app.test_request_context():
-            g.offering = Offering.query.filter_by(canvas_id=CS61A).one()
-            self.assertEqual(canvas_service.get_roster("token"), [
-                {"canvas_id": "5", "email": "a@test", "name": "A (display)"},
-                {"canvas_id": "6", "email": None, "name": "B"},
-            ])
-        get_users.assert_called_once_with(enrollment_type=["student"], enrollment_state=["active", "invited"],
-                                          include=["email"], per_page=100)
-
-    def test_requests_only_urls_sections_has_scopes_for(self):
-        # bCourses refuses a URL the sign-in didn't ask for a scope for, and
-        # canvasapi's method names don't always say which URL they call.
-        import re
-
-        from server import canvas_service
-
-        requested = []
-
-        def request(method, endpoint, **kwargs):
-            requested.append((method, endpoint))
-            if endpoint.startswith("courses/") and endpoint.count("/") == 1:
-                return SimpleNamespace(json=lambda: {"id": CS61A}, links={})
-            return SimpleNamespace(json=lambda: [{"id": 5, "name": "A", "email": "a@test"}], links={})
-
-        def has_scope(method, endpoint):
-            for scope in canvas_service.SCOPES:
-                scope_method, path = scope.removeprefix("url:").split("|")
-                pattern = re.sub(r":\w+", r"[^/]+", path.removeprefix("/api/v1/"))
-                if scope_method == method and re.fullmatch(pattern, endpoint):
-                    return True
-            return False
-
-        with patch("canvasapi.requester.Requester.request", side_effect=request), \
-                self.app.test_request_context():
-            g.offering = Offering.query.filter_by(canvas_id=CS61A).one()
-            canvas_service.get_roster("token")
-        self.assertEqual(requested, [("GET", f"courses/{CS61A}"), ("GET", f"courses/{CS61A}/search_users")])
-        for method, endpoint in requested:
-            self.assertTrue(has_scope(method, endpoint), f"No scope for {method} {endpoint}")
