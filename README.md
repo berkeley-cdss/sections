@@ -2,10 +2,11 @@
 
 [![A11y](https://github.com/berkeley-cdss/sections/actions/workflows/a11y.yml/badge.svg)](docs/a11y.md)
 
-
 ## Local Development Set Up
 
 Requires Python 3.14 and Node 24 (`mise install` picks both up from `mise.toml`), and Chrome for the browser tests. The frontend is React 19 and TypeScript, built with Vite.
+
+The commands below are for macOS and Linux. On Windows, use [WSL](https://learn.microsoft.com/en-us/windows/wsl/install) and run them in its Linux shell.
 
 1. Copy `.env.example` to `.env`. Never commit `.env`. By default the app mocks Canvas, so no Canvas credentials are needed (see [Mock Canvas](#mock-canvas)); to use the [Canvas sandbox](#canvas-sandbox) instead, set `MOCK_CANVAS=false` and fill in its `CANVAS_CLIENT_ID` and `CANVAS_CLIENT_SECRET` (ask a maintainer).
 2. Create a virtual environment and install the server dependencies:
@@ -17,7 +18,7 @@ Requires Python 3.14 and Node 24 (`mise install` picks both up from `mise.toml`)
 3. Install the frontend dependencies with `yarn install`.
 4. Create or update the local database with `flask --app server.main db upgrade` from the repository root. `server/` is a package, so run the app's commands from the root, as below.
 5. Run both with `yarn dev`, or separately: the backend with `python3 -m server.main` (port 8000) and the frontend with `yarn start` (the Vite dev server on port 3000, which forwards API calls, the login routes and `/offerings` to port 8000).
-6. Install the test dependencies with `pip install -r requirements-dev.txt`, then run the backend tests with `pytest` from the repository root (see [Tests](#tests)).
+6. Install the development dependencies (pytest, flake8, pip-audit, selenium) with `pip install -r requirements-dev.txt`, then run the backend tests with `pytest` from the repository root (see [Tests](#tests)).
 
 ## Tests
 
