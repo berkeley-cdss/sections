@@ -21,7 +21,15 @@ Requires Python 3.14 and Node 24 (`mise install` picks both up from `mise.toml`)
 
 ## Tests
 
-Tests live in `tests/`, as in seating: `tests/unit/` holds tests that use Flask's test client against an in-memory SQLite database, `tests/e2e/` uses the app in a browser as students and staff do ([docs/e2e.md](docs/e2e.md)), and `tests/a11y/` audits every page's accessibility in a browser ([docs/a11y.md](docs/a11y.md)). The browser tests share their server, seed data and helpers (`tests/browser.py`). `server/` is a package, and `pytest.ini` puts the repository root on the import path, so tests import the app's modules the way the app does (`from server.models import db`). `pytest` from the repository root runs the unit tests, `pytest tests/e2e` the end to end tests, and `pytest tests/a11y` the a11y audit. The browser tests also need Chrome and the frontend build in `server/static/` ([docs/e2e.md](docs/e2e.md) shows how). CI runs each on Python 3.14, the version the Dockerfile uses: the unit tests in `.github/workflows/test.yml`, which adds a coverage report to the run's summary page, and the browser tests in `e2e.yml` and `a11y.yml`.
+Tests live in `tests/`, as in seating: `tests/unit/` holds tests that use Flask's test client against an in-memory SQLite database, `tests/e2e/` uses the app in a browser as students and staff do ([docs/e2e.md](docs/e2e.md)), and `tests/a11y/` audits every page's accessibility in a browser ([docs/a11y.md](docs/a11y.md)). The browser tests share their server, seed data and helpers (`tests/browser.py`). `server/` is a package, and `pytest.ini` puts the repository root on the import path, so tests import the app's modules the way the app does (`from server.models import db`). `pytest` from the repository root runs the unit tests, `pytest tests/e2e` the end to end tests, and `pytest tests/a11y` the a11y audit. CI runs each on Python 3.14, the version the Dockerfile uses: the unit tests in `.github/workflows/test.yml`, which adds a coverage report to the run's summary page, and the browser tests in `e2e.yml` and `a11y.yml`.
+
+The browser tests need Chrome and the frontend build in `server/static/`, where the app serves the course pages from, as in the Docker image. `server/static/` is gitignored, so a fresh checkout has no build there. Build the frontend and copy it in yourself, and again after any frontend change:
+
+```
+yarn build && cp -R build/. server/static/
+```
+
+CI does this itself in `e2e.yml` and `a11y.yml`.
 
 Tests build the app with the same `create_app` (`server/application.py`) that `server/main.py` uses, given a test config, so they test the app as it's deployed:
 - New tests can be plain functions using the pytest fixtures in `tests/conftest.py` (`app`, `client`), like seating's tests.
