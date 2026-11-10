@@ -5,7 +5,7 @@
 
 ## Local Development Set Up
 
-Requires Python 3.14 and Node 24 (`mise install` picks both up from `mise.toml`). The frontend is React 19 and TypeScript, built with Vite.
+Requires Python 3.14 and Node 24 (`mise install` picks both up from `mise.toml`), and Chrome for the browser tests. The frontend is React 19 and TypeScript, built with Vite.
 
 1. Copy `.env.example` to `.env`. Never commit `.env`. By default the app mocks Canvas, so no Canvas credentials are needed (see [Mock Canvas](#mock-canvas)); to use the [Canvas sandbox](#canvas-sandbox) instead, set `MOCK_CANVAS=false` and fill in its `CANVAS_CLIENT_ID` and `CANVAS_CLIENT_SECRET` (ask a maintainer).
 2. Create a virtual environment and install the server dependencies:
@@ -83,7 +83,7 @@ Use COMPSCI 169A (Canvas course `1234567`), where Oski Bear is a teacher.
 
 ### With the Canvas sandbox
 
-Use Mango 101 (Canvas course `157` on the sandbox), with `MOCK_CANVAS=false`. Your sandbox account needs a role in that course to open it.
+Use "Mango 101 (Deokpy Section)" (Canvas course `157` on the sandbox), with `MOCK_CANVAS=false`. Your sandbox account needs a role in that course to open it.
 
 1. Set up the course: sign in and use "Import courses from Canvas" on `localhost:3000/offerings`, or run `python3 -m server.seed 157`.
 2. Optionally, import the example CSVs, as above with `--course 157`.
@@ -137,5 +137,5 @@ curl -X POST \
 
 ## Notes
 1. Use `yarn typecheck` (TypeScript) and `yarn lint` (ESLint); CI runs both.
-2. `print` output shows up right away when you run the backend on its own with `python3 -m server.main`. Under `yarn dev`, the backend's output goes through a pipe, so Python buffers it, and prints may not appear until the server stops. Use `print(..., flush=True)`, or run `PYTHONUNBUFFERED=1 yarn dev`.
+2. `print` output from the backend shows up right away, with `yarn dev` or `python3 -m server.main`. (`yarn dev` sets `PYTHONUNBUFFERED=1`; without it, Python would hold the output back until the server stops, since it goes through a pipe.)
 3. To try the staff, admin or student views, sign in as someone with that role: with the mock Canvas, pick them on `/dev_login/` (see [Mock Canvas](#mock-canvas)); with the sandbox, give your sandbox account the role in Canvas. Roles come from Canvas at each sign-in, so editing them in the local database doesn't last.
