@@ -18,6 +18,9 @@ CONTENT_SECURITY_POLICY = "; ".join([
     "connect-src 'self'",
     "base-uri 'self'",
     "object-src 'none'",
+    # No other site, including another berkeley.edu page that SameSite=Lax would not stop, may
+    # frame these pages and trick someone into clicking on them.
+    "frame-ancestors 'none'",
 ])
 
 
