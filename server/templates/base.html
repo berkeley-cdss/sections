@@ -8,6 +8,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <link rel="icon" href="/favicon.ico">
     <link rel="stylesheet" href="{{ url_for('pages.static', filename='vendor/bootstrap/bootstrap.min.css') }}">
+    <link rel="stylesheet" href="{{ url_for('pages.static', filename='vendor/bootstrap-icons/bootstrap-icons.min.css') }}">
     <link rel="stylesheet" type="text/css" href="{{ url_for('pages.static', filename='css/style.css') }}">
     <link rel="stylesheet" type="text/css" href="{{ url_for('pages.static', filename='css/flash.css') }}">
     <title>{% block title %}{{ title }}{% endblock %}</title>
@@ -75,5 +76,6 @@
 
     <script src="{{ url_for('pages.static', filename='vendor/bootstrap/bootstrap.bundle.min.js') }}"></script>
     <script src="{{ url_for('pages.static', filename='js/confirm.js') }}"></script>
+    <script src="{{ url_for('pages.static', filename='js/tooltips.js') }}"></script>
   </body>
 </html>

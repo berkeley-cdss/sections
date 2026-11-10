@@ -107,13 +107,13 @@ def create_offering_pages(app: flask.Flask):
         db.session.delete(offering)
         db.session.commit()
         if key == str(canvas_id):
-            flash(f"Removed {display_name}. Its sections and attendance are kept; "
+            flash(f"Hid {display_name}. Its sections and attendance are kept; "
                   "import it again to restore them.", "success")
         else:
             # Linked from the monorepo: importing would start over under a new key, and
             # linking it again is a command only a maintainer can run, so the
             # command goes in the log for them.
-            flash(f"Removed {display_name}. Its sections and attendance are kept under "
+            flash(f"Hid {display_name}. Its sections and attendance are kept under "
                   f"'{key}'. Ask a Sections maintainer to restore them.", "success")
             current_app.logger.info(
                 "%s removed offering %s (key %s); to restore it, run from the repository root: "
