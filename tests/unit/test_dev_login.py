@@ -130,6 +130,14 @@ class DevLoginTests(AppTestCase):
             self.assertNotIn("canvas_access_token", browser)
             self.assertEqual(CanvasToken.query.filter_by(user_id=user.id).one().access_token, "dev_access_token")
 
+    def test_login_never_sends_people_to_another_site_afterwards(self):
+        # Browsers treat each of these as //evil.com.
+        for target in ["//evil.com", "/\\evil.com", "/\t/evil.com", "/\n/evil.com", "https://evil.com"]:
+            with self.subTest(target=target):
+                self.get("/login/", query_string={"next": target})
+                location = self.dev_login(YU_LONG).headers["Location"]
+                self.assertEqual(location, "/offerings")
+
     def test_staff_can_set_up_a_course_and_add_students_from_the_fake_canvas(self):
         self.dev_login(OSKI)
         self.post("/offerings/new", data={"offerings": [str(CS169A)]})
