@@ -40,6 +40,20 @@ class OfferingsPagesTests(CourseTestCase):
         self.assertIn(f'href="/offerings/{CS61A}/"', student_part)
         self.assertNotIn("/remove", page)  # only staff offerings can be removed
 
+    def test_courses_with_global_canvas_ids(self):
+        """Canvas gives a course on another shard a global ID, too big for a
+        32-bit integer. Staff in one can still list, import and open it."""
+        cross_shard = 30000002702310
+        staff = db.session.get(User, self.staff_id)
+        staff.canvas_courses = {**staff.canvas_courses,
+                                str(cross_shard): canvas_course("CS 10", staff=True, admin=True)}
+        db.session.commit()
+        self.assertEqual(self.get("/offerings").status_code, 200)
+        self.post("/offerings/new", data={"offerings": [str(cross_shard)]})
+        self.assertEqual(Offering.query.filter_by(canvas_id=cross_shard).one().key, str(cross_shard))
+        self.assertIn(f'href="/offerings/{cross_shard}/"', self.get("/offerings").get_data(as_text=True))
+        self.assertTrue(self.api("refresh_state", cross_shard).get_json()["success"])
+
     def make_cs61a_admin(self):
         staff = db.session.get(User, self.staff_id)
         staff.canvas_courses = {**staff.canvas_courses, str(CS61A): canvas_course("CS 61A", staff=True, admin=True)}

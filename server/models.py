@@ -494,7 +494,9 @@ class Offering(db.Model):
 
     __tablename__ = "offerings"
     id: int = db.Column(db.Integer, primary_key=True)
-    canvas_id: int = db.Column(db.Integer, unique=True, index=True, nullable=False)
+    # BigInteger: Canvas gives courses on another shard global IDs
+    # (shard * 10**13 + local ID), too big for a 32-bit integer.
+    canvas_id: int = db.Column(db.BigInteger, unique=True, index=True, nullable=False)
     # The value of the `course` column on every other table. Offerings set up in
     # this app use str(canvas_id); offerings moved from the monorepo keep their
     # old key (e.g. "cs61a") so their existing rows don't need rewriting.
