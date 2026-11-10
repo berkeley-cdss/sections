@@ -17,7 +17,7 @@ The commands below are for macOS and Linux. On Windows, use [WSL](https://learn.
    ```
 3. Install the frontend dependencies with `yarn install`.
 4. Create or update the local database with `flask --app server.main db upgrade` from the repository root. `server/` is a package, so run the app's commands from the root, as below.
-5. Run both with `yarn dev`, or separately: the backend with `python3 -m server.main` (port 8000) and the frontend with `yarn start` (the Vite dev server on port 3000, which forwards API calls, the login routes and `/offerings` to port 8000).
+5. Start the backend and the frontend together with `yarn dev`, or separately: the backend with `python3 -m server.main` (port 8000) and the frontend with `yarn start` (the Vite dev server on port 3000, which forwards API calls, the login routes and `/offerings` to port 8000).
 6. Install the development dependencies (pytest, flake8, pip-audit, selenium) with `pip install -r requirements-dev.txt`, then run the backend tests with `pytest` from the repository root (see [Tests](#tests)).
 
 ## Tests
