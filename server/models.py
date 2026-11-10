@@ -488,6 +488,18 @@ class CourseConfig(db.Model):
         }
 
 
+# offerings.canvas_id is a 32-bit integer. Canvas gives a course on another
+# shard a global ID (shard * 10**13 + local ID, e.g. 30000002702310), which
+# doesn't fit, so Sections skips those courses, as seating skips courses it
+# can't use. Postgres refuses a query comparing the column with a bigger number.
+MAX_OFFERING_CANVAS_ID = 2**31 - 1
+
+
+def can_be_offering(canvas_id) -> bool:
+    """Whether a Canvas course ID fits in offerings.canvas_id."""
+    return int(canvas_id) <= MAX_OFFERING_CANVAS_ID
+
+
 class Offering(db.Model):
     """One semester's bCourses course that has been set up in this app, like
     seating's Offering."""

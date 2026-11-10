@@ -40,6 +40,22 @@ class OfferingsPagesTests(CourseTestCase):
         self.assertIn(f'href="/offerings/{CS61A}/"', student_part)
         self.assertNotIn("/remove", page)  # only staff offerings can be removed
 
+    def test_courses_with_too_big_ids_are_skipped(self):
+        """A course ID saved at an earlier sign-in that's too big for
+        offerings.canvas_id doesn't break the offerings page, and course URLs
+        with one aren't found."""
+        too_big = 30000002702310
+        staff = db.session.get(User, self.staff_id)
+        staff.canvas_courses = {**staff.canvas_courses,
+                                str(too_big): canvas_course("CS 10", staff=True, admin=True)}
+        db.session.commit()
+        page = self.get("/offerings").get_data(as_text=True)
+        self.assertIn(f'href="/offerings/{CS61A}/"', page)
+        self.assertNotIn(str(too_big), page)
+        self.assertNotIn(str(too_big), self.get("/offerings/new").get_data(as_text=True))
+        self.assertEqual(self.get(f"/offerings/{too_big}/").status_code, 404)
+        self.assertEqual(self.post(f"/offerings/{too_big}/remove").status_code, 404)
+
     def make_cs61a_admin(self):
         staff = db.session.get(User, self.staff_id)
         staff.canvas_courses = {**staff.canvas_courses, str(CS61A): canvas_course("CS 61A", staff=True, admin=True)}

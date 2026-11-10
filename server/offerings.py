@@ -5,13 +5,14 @@ import flask
 from flask import Blueprint, abort, current_app, flash, redirect, render_template, request, url_for
 from flask_login import current_user, login_required
 
-from server.models import Offering, db
+from server.models import Offering, can_be_offering, db
 
 
 def _categorized_offerings(user):
     """Set-up offerings the user is staff in, a student in, or otherwise
     enrolled in, like seating's offerings page."""
-    canvas_ids = [int(i) for i in user.canvas_courses]
+    # Skip too-big IDs saved at a sign-in before they were skipped there.
+    canvas_ids = [int(i) for i in user.canvas_courses if can_be_offering(i)]
     existing = Offering.query.filter(Offering.canvas_id.in_(canvas_ids)).all()
     staff, students, other = [], [], []
     for offering in existing:
@@ -72,7 +73,7 @@ def create_offering_pages(app: flask.Flask):
         candidates = {
             int(canvas_id): info
             for canvas_id, info in current_user.canvas_courses.items()
-            if info["is_staff"] and int(canvas_id) not in existing
+            if info["is_staff"] and can_be_offering(canvas_id) and int(canvas_id) not in existing
         }
         if not candidates:
             flash("No more new courses to import.", "info")
@@ -99,6 +100,8 @@ def create_offering_pages(app: flask.Flask):
         """Take an offering off Sections, like seating's delete, but keep its
         sections and attendance: they're stored under its key, not linked to the
         Offering row, so importing the course again brings them back."""
+        if not can_be_offering(canvas_id):
+            abort(404)
         offering = Offering.query.filter_by(canvas_id=canvas_id).first_or_404()
         if not can_remove(current_user, canvas_id):
             abort(403, "Only course admins (instructors and Lead TAs) can remove an offering.")
@@ -131,6 +134,8 @@ def create_offering_pages(app: flask.Flask):
         NAME is shown until a course member signs in, which fills in the
         course's Canvas name, code and start date.
         """
+        if not can_be_offering(canvas_id):
+            raise click.ClickException(f"Canvas course {canvas_id}'s ID is too big for Sections.")
         if Offering.query.filter((Offering.canvas_id == canvas_id) | (Offering.key == key)).first():
             raise click.ClickException(f"Canvas course {canvas_id} or key '{key}' is already linked.")
         db.session.add(Offering(canvas_id=canvas_id, key=key, name=name))
