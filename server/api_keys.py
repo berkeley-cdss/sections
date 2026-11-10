@@ -73,9 +73,12 @@ def client_address() -> str:
     more. The client is the entry just before those; anything earlier came
     from the client and can't be trusted.
     """
-    route = request.access_route
-    if not route:
+    headers = request.headers.getlist("X-Forwarded-For")
+    if not headers:
         return request.remote_addr or ""
+    # Split on commas alone. request.access_route also parses quoted strings,
+    # so a stray quote from the client would empty the whole list.
+    route = [entry.strip() for entry in ",".join(headers).split(",")]
     hops = current_app.config.get("TRUSTED_PROXY_HOPS", DEFAULT_TRUSTED_PROXY_HOPS)
     # Fewer entries than proxies means the request skipped one; use the oldest.
     return route[max(len(route) - 1 - hops, 0)]
