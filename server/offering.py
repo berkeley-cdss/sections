@@ -6,14 +6,15 @@ load_offering resolves that ID to an Offering row for the rest of the request.
 
 from flask import abort, g
 
-from server.models import Offering
+from server.models import Offering, can_be_offering
 
 # Matches seating's offering URLs.
 OFFERING_URL_PREFIX = "/offerings/<int:canvas_course_id>"
 
 
 def load_offering(canvas_course_id: int):
-    offering = Offering.query.filter_by(canvas_id=canvas_course_id).one_or_none()
+    offering = Offering.query.filter_by(canvas_id=canvas_course_id).one_or_none() \
+        if can_be_offering(canvas_course_id) else None
     if offering is None:
         abort(404, "Sections isn't set up for this course yet. If this is unexpected, ask your course staff.")
     g.offering = offering

@@ -3,6 +3,7 @@ from canvasapi import Canvas
 from flask import current_app
 
 from server.fake_canvas import FakeCanvas
+from server.models import can_be_offering
 from server.offering import get_canvas_course_id
 
 # Requested at login. Must be a subset of the scopes on the sections Canvas developer key.
@@ -69,6 +70,9 @@ def get_user_courses(user_id, access_token: str) -> dict:
         enrollments = getattr(c, "enrollments", None) or []
         if not enrollments or not hasattr(c, "course_code"):
             continue  # courses the user can't see, or restricted by date
+        if not can_be_offering(c.id):
+            current_app.logger.info("Skipped Canvas course %s (%s): its ID is too big for Sections", c.id, c.name)
+            continue
         types = {e["type"] for e in enrollments}
         roles = {e.get("role") for e in enrollments}
         courses[str(c.id)] = {
