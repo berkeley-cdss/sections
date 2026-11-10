@@ -14,6 +14,7 @@ To use Sections, visit [sections.data8.org](https://sections.data8.org).
 - **[Testing](docs/testing.md):** unit tests, coverage, and the [end to end tests](docs/e2e.md) and [accessibility audit](docs/a11y.md).
 - **[Database Migrations](docs/migrations.md):** changing the schema, and why PR previews can't run migrations.
 - **[API](docs/api.md):** calling Sections from scripts with a course API key.
+- **[Contributing](CONTRIBUTING.md):** how to propose a change.
 
 ## Quick Start
 
