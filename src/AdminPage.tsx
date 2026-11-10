@@ -296,7 +296,7 @@ export default function AdminPage(): React.ReactNode {
                   Import Sections
                 </Button>{" "}
                 <Button variant="secondary" onClick={() => setShowImportEnrollmentModal(true)}>
-                  Import Students with Section Assignments
+                  Import Section Assignments
                 </Button>{" "}
                 <Button variant="secondary" onClick={() => setShowSyncBcoursesModal(true)}>
                   Sync bCourses
