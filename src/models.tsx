@@ -185,16 +185,6 @@ export function getSectionDay(section: Section) {
   return dayCodes[dayIndex];
 }
 
-export function sortedSections<T extends Section | SectionDetails>(
-  sections: Array<T>
-): Array<T> {
-  return sections
-    .slice()
-    .sort((section1, section2) =>
-      nextSessionStartTime(section1).diff(nextSessionStartTime(section2))
-    );
-}
-
 // Config flags are named per section type, e.g. canStudentsJoinLab or
 // canTutorsChangeDiscussion, where the suffix is a section's name.
 export function configAllows(
