@@ -120,3 +120,22 @@ def test_admin_makes_uses_rotates_and_revokes_an_api_key(site):
     site.wait(lambda: site.has_text("No one has an API key for this course."))
     status, body = call_api(site, new_key, "refresh_state")
     assert status == 401
+
+
+def test_admin_finds_a_students_sections(site):
+    site.visit(f"{OFFERING}/admin", TEACHER)
+    field = site.find('//input[@id="student-search"]')
+    field.send_keys("jimmy")
+    site.click("Search", field.find_element(By.XPATH, ".."))
+    site.wait(lambda: site.has_text("jimmyxu@example.com"))
+    row = site.find('//tr[contains(., "jimmyxu@example.com")]')
+    # In Yu Long's lab, and in no discussion yet.
+    assert "Lab: Yu Long" in row.text
+    assert "Soda 271" in row.text
+    assert "Discussion: Floating" in row.text
+    assert "Tutoring" not in row.text
+
+    field.clear()
+    field.send_keys("nobody")
+    site.click("Search", field.find_element(By.XPATH, ".."))
+    site.wait(lambda: site.has_text("No students match “nobody”."))

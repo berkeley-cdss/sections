@@ -10,7 +10,7 @@ from json import dumps
 from urllib.parse import urlparse
 from typing import List, Optional, Union
 from zoneinfo import ZoneInfo
-from server.import_sheet import parse_section_times
+from server.import_sheet import DAYS, parse_section_times
 
 import flask
 from flask import Blueprint, abort, g, jsonify, render_template, request, current_app
@@ -158,6 +158,47 @@ def add_student_helper(student: User, target_section: Section):
     student.sections.append(target_section)
     # SQLAlchemy 2.0 no longer cascades new objects into the session through backrefs.
     db.session.add(student)
+
+
+SECTION_TYPE_ORDER = {"Lab": 0, "Discussion": 1, "Tutoring": 2}
+# Every student is expected to be in one of each of these; tutoring is opt-in.
+FLOATING_TYPES = {"Lab", "Discussion"}
+FLOATING = "Floating"
+STUDENT_SEARCH_LIMIT = 25
+
+
+def section_day_and_start(section: Section) -> tuple[str, str]:
+    """The section's weekday ("M", "Th") and start time ("08:00a") in Berkeley."""
+    if not isinstance(section.start_time, (int, float)):
+        return "", str(section.start_time or "")
+    try:
+        dt = datetime.fromtimestamp(section.start_time, tz=ZoneInfo("America/Los_Angeles"))
+    except (OverflowError, OSError, ValueError):
+        return "", str(section.start_time)
+    day = DAYS[dt.weekday()] if dt.weekday() < len(DAYS) else ""
+    return day, dt.strftime("%I:%M%p").lower().replace("m", "")
+
+
+def describe_section(section: Section) -> str:
+    """e.g. "Alice Smith, Th 08:00a, Soda 271" """
+    day, start = section_day_and_start(section)
+    parts = [section.staff.name if section.staff else "No TA", f"{day} {start}".strip(), section.location or ""]
+    return ", ".join(part for part in parts if part)
+
+
+def csv_safe(value) -> str:
+    """The value as a CSV cell that a spreadsheet won't run as a formula: one
+    that starts with =, +, -, @, a tab or a carriage return gets a leading
+    apostrophe (OWASP's advice for CSV injection), so it opens as text."""
+    text = "" if value is None else str(value)
+    if text[:1] in ("=", "+", "-", "@", "\t", "\r"):
+        return "'" + text
+    return text
+
+
+def write_csv_row(writer, row) -> None:
+    writer.writerow([csv_safe(cell) for cell in row])
+
 
 def create_state_client(app: flask.Flask):
     # Every offering page and API lives under /offerings/<canvas course id>/.
@@ -1002,41 +1043,85 @@ def create_state_client(app: flask.Flask):
 
         for section in Section.query.filter_by(course=get_course()).all():
             staff_email = section.staff.email if section.staff else ""
-            location = section.location or ""
-            day = ""
-            start = ""
-
-            DAY_MAP = {
-                0: "M",
-                1: "T",
-                2: "W",
-                3: "Th",
-                4: "F",
-            }
-
-            try:
-
-                if isinstance(section.start_time, (int, float)):
-                    # Interpret stored UNIX timestamps in America/LA timezones
-                    tz = ZoneInfo("America/Los_Angeles")
-                    dt = datetime.fromtimestamp(section.start_time, tz=tz)
-                    day = DAY_MAP.get(dt.weekday(), "")  # e.g. "M", "Tu"
-                    start = dt.strftime("%I:%M%p").lower().replace('m', '')  # e.g. "08:00a"
-                else:
-                    # fallback: output as-is (just as a string)
-                    start = str(section.start_time or "")
-            except Exception:
-                day = ""
-                start = str(section.start_time or "")
-
+            day, start = section_day_and_start(section)
             for student in section.students:
-                writer.writerow([student.email, staff_email, location, day, start, section.name or ""])
+                write_csv_row(writer, [student.email, staff_email, section.location or "", day, start,
+                                       section.name or ""])
 
         csv_text = out.getvalue()
         return {
             **refresh_state(),
             "custom": {"fileName": "rosters.csv", "rosters": csv_text},
         }
+
+    @api
+    @admin_required
+    def export_students():
+        """Every student in the offering, with their section of each type, or
+        "Floating" for a lab or discussion they aren't in."""
+        course = get_course()
+        sections = Section.query.filter_by(course=course).all()
+        types = sorted({section.name for section in sections if section.name},
+                       key=lambda name: (SECTION_TYPE_ORDER.get(name, len(SECTION_TYPE_ORDER)), name))
+        students = (
+            User.query.filter(set_contains(User.student_offerings, course))
+            .options(joinedload(User.sections).joinedload(Section.staff))
+            .all()
+        )
+
+        out = StringIO()
+        writer = csv.writer(out)
+        writer.writerow(["Name", "Email", *types])
+        for student in sorted(students, key=lambda student: (student.name.lower(), student.email.lower())):
+            by_type = {}
+            for section in student.sections_in(course):
+                by_type.setdefault(section.name, []).append(describe_section(section))
+            write_csv_row(writer, [
+                student.name,
+                student.email,
+                *("; ".join(by_type[name]) if name in by_type
+                  else FLOATING if name in FLOATING_TYPES else ""
+                  for name in types),
+            ])
+
+        return {"custom": {"fileName": "students.csv", "students": out.getvalue()}}
+
+    @api
+    @staff_required
+    def search_students(query: str):
+        """Students in the offering whose name or email contains `query`, with
+        their sections here."""
+        query = query.strip().lower()
+        if not query:
+            return []
+        course = get_course()
+        students = (
+            User.query.filter(set_contains(User.student_offerings, course))
+            .filter(func.lower(User.name).contains(query, autoescape=True)
+                    | func.lower(User.email).contains(query, autoescape=True))
+            .options(joinedload(User.sections).joinedload(Section.staff))
+            .order_by(User.name, User.email)
+            .limit(STUDENT_SEARCH_LIMIT)
+            .all()
+        )
+        return [
+            {
+                **student.identity_json,
+                "sections": [
+                    {
+                        "id": str(section.id),
+                        "name": section.name,
+                        "startTime": section.start_time,
+                        "endTime": section.end_time,
+                        "location": section.location,
+                        "staff": section.staff.identity_json if section.staff is not None else None,
+                    }
+                    for section in sorted(student.sections_in(course),
+                                          key=lambda section: SECTION_TYPE_ORDER.get(section.name, 99))
+                ],
+            }
+            for student in students
+        ]
 
     @api
     @staff_required

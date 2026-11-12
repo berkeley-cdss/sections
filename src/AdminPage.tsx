@@ -20,8 +20,10 @@ import type { CourseConfig } from "./models";
 import StateContext from "./StateContext";
 import ToggleSwitch from "./ToggleSwitch";
 import useAPI from "./useStateAPI";
+import useBareAPI from "./useAPI";
 import AddStudentModal from "./AddStudentModal";
 import ResetSectionsModal from "./ResetSectionsModal";
+import StudentSearch from "./StudentSearch";
 import SyncBcoursesModal from "./SyncBcoursesModal";
 import MessageContext from "./MessageContext";
 
@@ -161,6 +163,13 @@ export default function AdminPage(): React.ReactNode {
     }
     downloadText(rosters, fileName);
   });
+  // Doesn't change the state, so no need to refresh it.
+  const exportStudents = useBareAPI(
+    "export_students",
+    useCallback(({ custom: { students, fileName } }: { custom: { students: string; fileName: string } }) => {
+      downloadText(students, fileName);
+    }, [])
+  );
   const fetchToDrop = useAPI("fetch_to_drop", ({ custom: { students } }) => {
     if (students == null) {
       return;
@@ -310,8 +319,18 @@ export default function AdminPage(): React.ReactNode {
                 </Button>{" "}
                 <Button variant="secondary" onClick={() => exportAttendance({})}>
                   Export Full Attendances
+                </Button>{" "}
+                <Button variant="secondary" onClick={() => exportStudents({})}>
+                  Export Students
                 </Button>
               </p>
+              <p className="text-muted small">
+                Export Students lists every student with their section of each type, or
+                &ldquo;Floating&rdquo; if they have no lab or discussion section. Sync bCourses first so
+                it includes students who&rsquo;ve just joined and leaves out those who&rsquo;ve dropped.
+              </p>
+
+              <StudentSearch />
 
               {/* Line 3: Description Text */}
               <p>
