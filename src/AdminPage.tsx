@@ -336,14 +336,24 @@ export default function AdminPage(): React.ReactNode {
                   Export Students
                 </Button>
               </p>
-              <p className="text-muted small">
-                &ldquo;Export Section Assignments&rdquo; has one row per student per section, in the format
-                &ldquo;Import Section Assignments&rdquo; reads, so you can export, edit the spreadsheet, and import it
-                back. Students in no section aren&rsquo;t in it. &ldquo;Export Students&rdquo; has one row per
-                student in the offering, with their section of each type, or &ldquo;Floating&rdquo; if they have no
-                lab or discussion section. Run &ldquo;Sync bCourses Students&rdquo; first so it includes students
-                who&rsquo;ve just joined and leaves out those who&rsquo;ve dropped.
-              </p>
+              <ul className="text-muted small">
+                <li>
+                  &ldquo;Export Section Assignments&rdquo; (CSV) has one row per student per section, in the format
+                  &ldquo;Import Section Assignments&rdquo; reads, so you can export, edit the spreadsheet, and import
+                  it back. Students in no section aren&rsquo;t in it.
+                </li>
+                <li>
+                  &ldquo;Export Full Attendances&rdquo; (JSON) has every attendance record, by section type and
+                  student. All students who have had attendance recorded are included in this export, even if the
+                  student has been removed from a section or this course offering.
+                </li>
+                <li>
+                  &ldquo;Export Students&rdquo; (CSV) has one row per student in the offering, with their section of
+                  each type, or &ldquo;Floating&rdquo; if they have no lab or discussion section. Run &ldquo;Sync
+                  bCourses Students&rdquo; first so it includes students who&rsquo;ve just joined and leaves out
+                  those who&rsquo;ve dropped.
+                </li>
+              </ul>
 
               <p>
                 <Button variant="secondary" onClick={() => fetchToDrop()}>
