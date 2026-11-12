@@ -1,8 +1,11 @@
 import requests
 from canvasapi import Canvas
+from canvasapi.paginated_list import PaginatedList
+from canvasapi.user import User as CanvasUser
+from canvasapi.util import combine_kwargs
 from flask import current_app
 
-from server.fake_canvas import FakeCanvas
+from server.fake_canvas import FakeCanvas, FakeCourse
 from server.models import can_be_offering
 from server.offering import get_canvas_course_id
 
@@ -13,6 +16,7 @@ SCOPES = [
     "url:GET|/api/v1/users/:user_id/courses",
     "url:GET|/api/v1/users/:user_id/profile",
     "url:GET|/api/v1/courses/:course_id/enrollments",
+    "url:GET|/api/v1/courses/:course_id/users",
 ]
 
 # Enrollment types as the user courses endpoint reports them.
@@ -99,6 +103,36 @@ def get_course_staff(access_token: str) -> dict[str, bool]:
         is_admin = enrollment.type == "TeacherEnrollment" or enrollment.role == "Lead TA"
         staff[user_id] = staff.get(user_id, False) or is_admin
     return staff
+
+
+def _course_users(course, **params):
+    """The course's users, from courses/:course_id/users. canvasapi's
+    Course.get_users requests the same list from search_users, but Canvas links
+    every page after the first to courses/:course_id/users, and refuses a URL
+    the token has no scope for, so that would need both scopes."""
+    if isinstance(course, FakeCourse):
+        return course.get_users(**params)
+    return PaginatedList(CanvasUser, course._requester, "GET", f"courses/{course.id}/users",
+                         _kwargs=combine_kwargs(**params))
+
+
+def get_roster(access_token: str) -> list[dict]:
+    """The current course's students on bCourses, including those who haven't
+    accepted their invitation yet: ``[{"canvas_id", "email", "name"}]``. The
+    email is the one Canvas shares (their primary email, as at sign-in), or
+    None if it shares none, and the name their display name. Waitlisted
+    students are included when bCourses enrolls them as students.
+
+    Unlike the enrollments endpoint, this lists each student once, however many
+    of the course's sections (lecture, lab, discussion) they're enrolled in,
+    and gives their email rather than their login (at Berkeley, a CalNet UID)."""
+    course = _client(access_token).get_course(get_canvas_course_id())
+    return [
+        {"canvas_id": str(user.id), "email": getattr(user, "email", None) or None,
+         "name": getattr(user, "short_name", None) or user.name}
+        for user in _course_users(course, enrollment_type=["student"], enrollment_state=["active", "invited"],
+                                  include=["email"], per_page=100)
+    ]
 
 
 def get_student_from_email(email: str, access_token: str):

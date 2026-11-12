@@ -22,6 +22,7 @@ import ToggleSwitch from "./ToggleSwitch";
 import useAPI from "./useStateAPI";
 import AddStudentModal from "./AddStudentModal";
 import ResetSectionsModal from "./ResetSectionsModal";
+import SyncBcoursesModal from "./SyncBcoursesModal";
 import MessageContext from "./MessageContext";
 
 type ConfigKey = Exclude<keyof CourseConfig, "message" | "staffUrl">;
@@ -134,6 +135,7 @@ export default function AdminPage(): React.ReactNode {
 
   const [showImportSectionsModal, setShowImportSectionsModal] = useState(false);
   const [showImportEnrollmentModal, setShowImportEnrollmentModal] = useState(false);
+  const [showSyncBcoursesModal, setShowSyncBcoursesModal] = useState(false);
   const [message, setMessage] = useState(config.message);
   const [staffUrl, setStaffUrl] = useState(config.staffUrl ?? "");
   const [savingStaffUrl, setSavingStaffUrl] = useState(false);
@@ -294,7 +296,10 @@ export default function AdminPage(): React.ReactNode {
                   Import Sections
                 </Button>{" "}
                 <Button variant="secondary" onClick={() => setShowImportEnrollmentModal(true)}>
-                  Import Students
+                  Import Section Assignments
+                </Button>{" "}
+                <Button variant="secondary" onClick={() => setShowSyncBcoursesModal(true)}>
+                  Sync bCourses
                 </Button>
               </p>
 
@@ -372,6 +377,7 @@ export default function AdminPage(): React.ReactNode {
         show={showImportEnrollmentModal}
         onClose={() => setShowImportEnrollmentModal(false)}
       />
+      <SyncBcoursesModal show={showSyncBcoursesModal} onClose={() => setShowSyncBcoursesModal(false)} />
     </Container>
   );
 }
