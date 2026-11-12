@@ -58,7 +58,7 @@ def test_admin_syncs_students_with_bcourses(site, database):
 
     site.visit(f"{OFFERING}/admin", TEACHER)
     site.click("Roster Management", site.find('//*[@role="tablist"]'))
-    site.click("Sync bCourses")
+    site.click("Sync bCourses Students")
     dialog = site.find('//*[@role="dialog"]')
     # The fake Canvas lists three students in the course; Jimmy Xu is already here.
     site.wait(lambda: "This will add 2 and remove 1 students." in dialog.text)

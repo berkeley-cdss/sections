@@ -79,7 +79,7 @@ export default function SyncBcoursesModal({ show, onClose }: Props) {
   return (
     <Modal show={show} onShow={loadPreview} onHide={onClose}>
       <Modal.Header closeButton>
-        <Modal.Title>Sync bCourses</Modal.Title>
+        <Modal.Title>Sync bCourses Students</Modal.Title>
       </Modal.Header>
       <Modal.Body>
         <p>

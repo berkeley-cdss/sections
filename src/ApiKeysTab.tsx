@@ -52,7 +52,7 @@ export default function ApiKeysTab() {
   };
 
   return (
-    <div className="mt-3">
+    <div>
       <p>
         An API key lets a script call this course&rsquo;s Sections API as you, or as anyone in this
         course. It works only in this course, only while you&rsquo;re an admin here in bCourses, and

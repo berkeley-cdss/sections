@@ -246,7 +246,7 @@ export default function AdminPage(): React.ReactNode {
       <h1 className="h2">Admin Settings</h1>
       <Row>
         <Col>
-          <Tabs defaultActiveKey="general">
+          <Tabs defaultActiveKey="general" className="mb-3">
             <Tab eventKey="general" title="General">
               <div className="mb-3">
                 Welcome message:
@@ -309,7 +309,7 @@ export default function AdminPage(): React.ReactNode {
                   Import Section Assignments
                 </Button>{" "}
                 <Button variant="secondary" onClick={() => setShowSyncBcoursesModal(true)}>
-                  Sync bCourses
+                  Sync bCourses Students
                 </Button>
               </p>
 
@@ -332,7 +332,7 @@ export default function AdminPage(): React.ReactNode {
               </p>
               <p className="text-muted small">
                 Export Students has one row per student in the offering, with their section of each type, or
-                &ldquo;Floating&rdquo; if they have no lab or discussion section. Sync bCourses first so it
+                &ldquo;Floating&rdquo; if they have no lab or discussion section. Sync bCourses Students first so it
                 includes students who&rsquo;ve just joined and leaves out those who&rsquo;ve dropped.
               </p>
 
