@@ -249,18 +249,19 @@ export default function AdminPage(): React.ReactNode {
           <Tabs defaultActiveKey="general" className="mb-3">
             <Tab eventKey="general" title="General">
               <div className="mb-3">
-                <label htmlFor="welcome-message">Welcome message:</label>
-                <FormControl
-                  id="welcome-message"
-                  as="textarea"
-                  rows={8}
-                  placeholder="Write a short welcome message for students"
-                  value={message}
-                  onChange={(e) => setMessage(e.target.value)}
-                />
-                <Button className="mt-2" variant="outline-secondary" onClick={() => updateConfig({ message })}>
-                  Save
-                </Button>
+                Welcome message:
+                <InputGroup>
+                  <FormControl
+                    as="textarea"
+                    rows={8}
+                    placeholder="Write a short welcome message for students"
+                    value={message}
+                    onChange={(e) => setMessage(e.target.value)}
+                  />
+                  <Button variant="outline-secondary" onClick={() => updateConfig({ message })}>
+                    Save
+                  </Button>
+                </InputGroup>
               </div>
               <div className="mb-3">
                 Preview of welcome message:
