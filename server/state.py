@@ -196,12 +196,25 @@ def csv_safe(value) -> str:
     return text
 
 
+def term_slug(start_at: str | None) -> str:
+    """e.g. "fa26" for a term starting 2026-08-19: Berkeley's spring starts in
+    January, summer in May or June, and fall in August. "" if unknown."""
+    match = re.match(r"(\d{2})(\d{2})-(\d{2})", start_at or "")
+    if match is None:
+        return ""
+    month = int(match.group(3))
+    season = "sp" if month <= 4 else "su" if month <= 7 else "fa"
+    return season + match.group(2)
+
+
 def export_file_name(name: str) -> str:
-    """e.g. "cs61a-rosters.csv" for CS 61A: the course code, lowercased with
-    anything but letters and digits dropped, so exports from different courses
-    don't overwrite each other in a downloads folder."""
+    """e.g. "cs61a-fa26-rosters.csv" for CS 61A in Fall 2026: the course code,
+    lowercased with anything but letters and digits dropped, then the term, so
+    exports from different courses and semesters don't overwrite each other in
+    a downloads folder."""
     course = re.sub(r"[^a-z0-9]", "", get_course_name().lower())
-    return f"{course}-{name}" if course else name
+    prefix = "-".join(part for part in (course, term_slug(g.offering.start_at)) if part)
+    return f"{prefix}-{name}" if prefix else name
 
 
 def write_csv_row(writer, row) -> None:

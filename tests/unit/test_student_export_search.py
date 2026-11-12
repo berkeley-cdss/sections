@@ -1,10 +1,11 @@
 """Exporting every student with their sections, and finding a student's sections."""
 
 import csv
+import unittest
 from io import StringIO
 
 from server.models import Section, User, db
-from server.state import csv_safe
+from server.state import csv_safe, term_slug
 from tests.unit.support import DATA8, CourseTestCase, canvas_course
 
 # 2026-08-20 15:00 UTC is Thursday 08:00 in Berkeley.
@@ -87,8 +88,9 @@ class RosterExportFormulaTests(CourseTestCase):
 
 
 class ExportFileNameTests(CourseTestCase):
-    def test_named_for_the_course_code(self):
-        # DATA 8's offering has a Canvas code; CS 61A's has only a name.
+    def test_named_for_the_course_code_and_term(self):
+        # DATA 8's offering has a Canvas code and a term starting 2026-08-19;
+        # CS 61A's has only a name, so its files have no term.
         self.make_staff_admin()
         known = self.enroll_known_in_data8()
         known.canvas_courses = {**known.canvas_courses, str(DATA8): canvas_course("DATA 8", admin=True, staff=True)}
@@ -96,7 +98,15 @@ class ExportFileNameTests(CourseTestCase):
         db.session.commit()
         self.sign_in(known)
         body = self.api("export_attendance", canvas_course_id=DATA8).get_json()
-        self.assertEqual(body["data"]["custom"]["fileName"], "data8-attendances.json")
+        self.assertEqual(body["data"]["custom"]["fileName"], "data8-fa26-attendances.json")
+
+
+class TermSlugTests(unittest.TestCase):
+    def test_term_slug(self):
+        for start_at, expected in [("2026-01-20T08:00:00Z", "sp26"), ("2026-05-26T07:00:00Z", "su26"),
+                                   ("2026-06-22", "su26"), ("2026-08-19T07:00:00Z", "fa26"),
+                                   (None, ""), ("", ""), ("soon", "")]:
+            self.assertEqual(term_slug(start_at), expected, start_at)
 
 
 class CsvSafeTests(CourseTestCase):
