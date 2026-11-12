@@ -300,20 +300,29 @@ export default function AdminPage(): React.ReactNode {
               </div>
             </Tab>
             <Tab eventKey="roster" title="Roster Management">
-              {/* Line 1: Import Buttons */}
+              <p className="mb-1">At the start of the semester, start by:</p>
+              <ol>
+                <li>syncing the bCourses student roster,</li>
+                <li>importing sections,</li>
+                <li>importing section assignments.</li>
+              </ol>
               <p>
+                It is safe to run any of these steps again. For example, if you want to drop students from sections
+                who have dropped your course, re-run the bCourses sync. You can also add more sections after your
+                initial setup, and assign students who added the course late.
+              </p>
+              <p>
+                <Button variant="secondary" onClick={() => setShowSyncBcoursesModal(true)}>
+                  Sync bCourses Students
+                </Button>{" "}
                 <Button variant="secondary" onClick={() => setShowImportSectionsModal(true)}>
                   Import Sections
                 </Button>{" "}
                 <Button variant="secondary" onClick={() => setShowImportEnrollmentModal(true)}>
                   Import Section Assignments
-                </Button>{" "}
-                <Button variant="secondary" onClick={() => setShowSyncBcoursesModal(true)}>
-                  Sync bCourses Students
                 </Button>
               </p>
 
-              {/* Line 2: Export Buttons */}
               <p>
                 <Button variant="secondary" onClick={() => exportRosters({})}>
                   Export Section Assignments
@@ -338,13 +347,6 @@ export default function AdminPage(): React.ReactNode {
 
               <StudentSearch />
 
-              {/* Line 3: Description Text */}
-              <p>
-                The following will obtain emails of students who have at least one unexcused absence
-                or 3 excused absences in their enrolled tutoring section.
-              </p>
-
-              {/* Line 4: Copy Students to Drop */}
               <p>
                 <Button variant="secondary" onClick={() => fetchToDrop()}>
                   Copy Students To Drop (Tutoring)
@@ -359,8 +361,11 @@ export default function AdminPage(): React.ReactNode {
                   onClose={() => setRemovingTutoring(false)}
                 />
               </p>
+              <p className="text-muted small">
+                Copy Students To Drop copies the emails of students who have at least one unexcused absence or 3
+                excused absences in their tutoring section.
+              </p>
 
-              {/* Line 5: Admin Management Actions */}
               {currentUser?.isAdmin && (
                 <p>
                   <Button variant="danger" onClick={() => setRemoving(true)}>
