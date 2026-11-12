@@ -253,7 +253,7 @@ export default function AdminPage(): React.ReactNode {
                 <InputGroup>
                   <FormControl
                     as="textarea"
-                    rows={8}
+                    rows={4}
                     placeholder="Write a short welcome message for students"
                     value={message}
                     onChange={(e) => setMessage(e.target.value)}
