@@ -196,6 +196,14 @@ def csv_safe(value) -> str:
     return text
 
 
+def export_file_name(name: str) -> str:
+    """e.g. "cs61a-rosters.csv" for CS 61A: the course code, lowercased with
+    anything but letters and digits dropped, so exports from different courses
+    don't overwrite each other in a downloads folder."""
+    course = re.sub(r"[^a-z0-9]", "", get_course_name().lower())
+    return f"{course}-{name}" if course else name
+
+
 def write_csv_row(writer, row) -> None:
     writer.writerow([csv_safe(cell) for cell in row])
 
@@ -970,7 +978,7 @@ def create_state_client(app: flask.Flask):
         return {
             **refresh_state(),
             "custom": {
-                "fileName": "attendances.json",
+                "fileName": export_file_name("attendances.json"),
                 "attendances": stringify(
                     [{"type": k, "attendances": v} for k, v in attendances.items()]
                 ),
@@ -1051,7 +1059,7 @@ def create_state_client(app: flask.Flask):
         csv_text = out.getvalue()
         return {
             **refresh_state(),
-            "custom": {"fileName": "rosters.csv", "rosters": csv_text},
+            "custom": {"fileName": export_file_name("rosters.csv"), "rosters": csv_text},
         }
 
     @api
@@ -1084,7 +1092,7 @@ def create_state_client(app: flask.Flask):
                   for name in types),
             ])
 
-        return {"custom": {"fileName": "students.csv", "students": out.getvalue()}}
+        return {"custom": {"fileName": export_file_name("students.csv"), "students": out.getvalue()}}
 
     @api
     @staff_required

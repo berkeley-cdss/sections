@@ -5,7 +5,7 @@ from io import StringIO
 
 from server.models import Section, User, db
 from server.state import csv_safe
-from tests.unit.support import CourseTestCase, lab
+from tests.unit.support import DATA8, CourseTestCase, canvas_course
 
 # 2026-08-20 15:00 UTC is Thursday 08:00 in Berkeley.
 THURSDAY_8AM = 1787238000
@@ -25,7 +25,7 @@ class StudentExportTests(CourseTestCase):
         body = self.api("export_students").get_json()
         self.assertTrue(body["success"], body)
         custom = body["data"]["custom"]
-        self.assertEqual(custom["fileName"], "students.csv")
+        self.assertEqual(custom["fileName"], "cs61a-students.csv")
         return list(csv.reader(StringIO(custom["students"])))
 
     def test_lists_each_students_sections_or_floating(self):
@@ -66,7 +66,6 @@ class StudentExportTests(CourseTestCase):
         self.assertEqual(self.export()[1][0], "'=HYPERLINK(\"http://evil\",\"x\")")
 
 
-
 class StudentExportPermissionTests(CourseTestCase):
     def test_admins_only(self):
         body = self.api("export_students").get_json()  # signed in as staff, not admin
@@ -81,8 +80,23 @@ class RosterExportFormulaTests(CourseTestCase):
         section.location = "@SUM(A1)"
         section.students.append(db.session.get(User, self.known_id))
         db.session.commit()
-        rosters = self.api("export_rosters").get_json()["data"]["custom"]["rosters"]
+        custom = self.api("export_rosters").get_json()["data"]["custom"]
+        self.assertEqual(custom["fileName"], "cs61a-rosters.csv")
+        rosters = custom["rosters"]
         self.assertEqual(list(csv.reader(StringIO(rosters)))[1][2], "'@SUM(A1)")
+
+
+class ExportFileNameTests(CourseTestCase):
+    def test_named_for_the_course_code(self):
+        # DATA 8's offering has a Canvas code; CS 61A's has only a name.
+        self.make_staff_admin()
+        known = self.enroll_known_in_data8()
+        known.canvas_courses = {**known.canvas_courses, str(DATA8): canvas_course("DATA 8", admin=True, staff=True)}
+        known.set_role(str(DATA8), is_staff=True, is_admin=True)
+        db.session.commit()
+        self.sign_in(known)
+        body = self.api("export_attendance", canvas_course_id=DATA8).get_json()
+        self.assertEqual(body["data"]["custom"]["fileName"], "data8-attendances.json")
 
 
 class CsvSafeTests(CourseTestCase):
