@@ -309,7 +309,7 @@ export default function AdminPage(): React.ReactNode {
               <p>
                 It is safe to run any of these steps again. For example, if you want to drop students from sections
                 who have dropped your course, re-run the bCourses sync. You can also add more sections after your
-                initial setup, and assign students who added the course late.
+                initial setup, and assign students in multiple rounds (like if they added the course late).
               </p>
               <p>
                 <Button variant="secondary" onClick={() => setShowSyncBcoursesModal(true)}>
@@ -323,6 +323,8 @@ export default function AdminPage(): React.ReactNode {
                 </Button>
               </p>
 
+              <StudentSearch />
+
               <p>
                 <Button variant="secondary" onClick={() => exportRosters({})}>
                   Export Section Assignments
@@ -335,17 +337,13 @@ export default function AdminPage(): React.ReactNode {
                 </Button>
               </p>
               <p className="text-muted small">
-                Export Section Assignments has one row per student per section, in the format Import Section
-                Assignments reads, so you can export, edit the spreadsheet, and import it back. Students in no
-                section aren&rsquo;t in it.
+                &ldquo;Export Section Assignments&rdquo; has one row per student per section, in the format
+                &ldquo;Import Section Assignments&rdquo; reads, so you can export, edit the spreadsheet, and import it
+                back. Students in no section aren&rsquo;t in it. &ldquo;Export Students&rdquo; has one row per
+                student in the offering, with their section of each type, or &ldquo;Floating&rdquo; if they have no
+                lab or discussion section. Run &ldquo;Sync bCourses Students&rdquo; first so it includes students
+                who&rsquo;ve just joined and leaves out those who&rsquo;ve dropped.
               </p>
-              <p className="text-muted small">
-                Export Students has one row per student in the offering, with their section of each type, or
-                &ldquo;Floating&rdquo; if they have no lab or discussion section. Sync bCourses Students first so it
-                includes students who&rsquo;ve just joined and leaves out those who&rsquo;ve dropped.
-              </p>
-
-              <StudentSearch />
 
               <p>
                 <Button variant="secondary" onClick={() => fetchToDrop()}>
@@ -362,8 +360,8 @@ export default function AdminPage(): React.ReactNode {
                 />
               </p>
               <p className="text-muted small">
-                Copy Students To Drop copies the emails of students who have at least one unexcused absence or 3
-                excused absences in their tutoring section.
+                &ldquo;Copy Students To Drop (Tutoring)&rdquo; copies the emails of students who have at least one
+                unexcused absence or 3 excused absences in their tutoring section.
               </p>
 
               {currentUser?.isAdmin && (
