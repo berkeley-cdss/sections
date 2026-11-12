@@ -57,6 +57,7 @@ def test_admin_syncs_students_with_bcourses(site, database):
         session.commit()
 
     site.visit(f"{OFFERING}/admin", TEACHER)
+    site.click("Roster Management", site.find('//*[@role="tablist"]'))
     site.click("Sync bCourses")
     dialog = site.find('//*[@role="dialog"]')
     # The fake Canvas lists three students in the course; Jimmy Xu is already here.
@@ -124,6 +125,7 @@ def test_admin_makes_uses_rotates_and_revokes_an_api_key(site):
 
 def test_admin_finds_a_students_sections(site):
     site.visit(f"{OFFERING}/admin", TEACHER)
+    site.click("Roster Management", site.find('//*[@role="tablist"]'))
     field = site.find('//input[@id="student-search"]')
     field.send_keys("jimmy")
     site.click("Search", field.find_element(By.XPATH, ".."))

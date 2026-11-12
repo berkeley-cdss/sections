@@ -298,7 +298,8 @@ export default function AdminPage(): React.ReactNode {
                   </Alert>
                 ) : null}
               </div>
-
+            </Tab>
+            <Tab eventKey="roster" title="Roster Management">
               {/* Line 1: Import Buttons */}
               <p>
                 <Button variant="secondary" onClick={() => setShowImportSectionsModal(true)}>
@@ -315,7 +316,7 @@ export default function AdminPage(): React.ReactNode {
               {/* Line 2: Export Buttons */}
               <p>
                 <Button variant="secondary" onClick={() => exportRosters({})}>
-                  Export Rosters
+                  Export Section Assignments
                 </Button>{" "}
                 <Button variant="secondary" onClick={() => exportAttendance({})}>
                   Export Full Attendances
@@ -325,9 +326,14 @@ export default function AdminPage(): React.ReactNode {
                 </Button>
               </p>
               <p className="text-muted small">
-                Export Students lists every student with their section of each type, or
-                &ldquo;Floating&rdquo; if they have no lab or discussion section. Sync bCourses first so
-                it includes students who&rsquo;ve just joined and leaves out those who&rsquo;ve dropped.
+                Export Section Assignments has one row per student per section, in the format Import Section
+                Assignments reads, so you can export, edit the spreadsheet, and import it back. Students in no
+                section aren&rsquo;t in it.
+              </p>
+              <p className="text-muted small">
+                Export Students has one row per student in the offering, with their section of each type, or
+                &ldquo;Floating&rdquo; if they have no lab or discussion section. Sync bCourses first so it
+                includes students who&rsquo;ve just joined and leaves out those who&rsquo;ve dropped.
               </p>
 
               <StudentSearch />
