@@ -874,6 +874,13 @@ def create_state_client(app: flask.Flask):
                                 time.perf_counter() - fetched_at)
         return {key: sorted(values) for key, values in changes.items()}
 
+    def has_course_records(user: User, course: str) -> bool:
+        """Whether ``user`` is a student in ``course``, or has sections or
+        attendance there (kept after a sync removes them)."""
+        return (course in user.student_offerings
+                or any(section.course == course for section in user.sections)
+                or any(attendance.course == course for attendance in user.attendances))
+
     def update_email(person: User, email: str, by_email: dict, changes: dict):
         """Give ``person`` their email on bCourses, as signing in would, if it
         has changed. If someone else in Sections already has that email, it's
@@ -888,7 +895,7 @@ def create_state_client(app: flask.Flask):
                 changes["conflicts"].append(
                     f"bCourses user {person.canvas_id} ({person.email}) has {email} on bCourses, but in "
                     f"Sections it belongs to bCourses user {owner.canvas_id}. Contact the Sections maintainers")
-            else:
+            elif has_course_records(owner, get_course()):
                 # Imported or added by staff under the new email before the
                 # student signed in again: the same person, for an admin to merge.
                 changes["conflicts"].append(
@@ -896,6 +903,13 @@ def create_state_client(app: flask.Flask):
                     f"Sections it belongs to someone who hasn't signed in. Use Merge Students to merge "
                     f"{email} into {person.email}, then sync again")
                 return owner
+            else:
+                # Only in other courses, so there's nothing to merge here.
+                # Signing in merges them everywhere (complete_login).
+                changes["conflicts"].append(
+                    f"bCourses user {person.canvas_id} ({person.email}) has {email} on bCourses, but in "
+                    f"Sections it belongs to someone in another course who hasn't signed in. It'll be "
+                    f"updated when {person.email} next signs in to Sections")
             return None
         changes["updated"].append(f"{person.email} → {email}")
         by_email.pop(person.email.lower(), None)
@@ -966,10 +980,7 @@ def create_state_client(app: flask.Flask):
                           f"from {target.email}. Only an email no one has signed in with can be merged.")
         if course in source.staff_offerings:
             raise Failure(f"{source.email} is on staff in this course, so it can't be merged into a student.")
-        in_course = (course in source.student_offerings
-                     or any(section.course == course for section in source.sections)
-                     or any(attendance.course == course for attendance in source.attendances))
-        if not in_course:
+        if not has_course_records(source, course):
             raise Failure(f"{source.email} isn't a student in this course.")
         if course not in target.student_offerings:
             raise Failure(f"{target.email} isn't a student in this course.")
@@ -980,7 +991,7 @@ def create_state_client(app: flask.Flask):
                                 current_user.email, "deleted" if deleted else "kept for other courses")
         message = f"Moved {source_email}'s sections and attendance in this course to {target.email}"
         message += (f" and removed {source_email}." if deleted
-                    else f". {source_email} is still in other courses, so it's kept there.")
+                    else f". {source_email} still has records outside this course, so it's kept.")
         return {**refresh_state(), "custom": {"message": message}}
 
     @api

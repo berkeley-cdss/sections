@@ -1,13 +1,14 @@
 """Syncing an offering's students with its bCourses roster."""
 
 import json
+import time
 
 import sqlalchemy
 from unittest.mock import patch
 
 from canvasapi.exceptions import InvalidAccessToken
 
-from server.models import Attendance, AttendanceStatus, Offering, Section, Session, User, db
+from server.models import ApiKey, Attendance, AttendanceStatus, CanvasToken, Offering, Section, Session, User, db
 from tests.unit.support import CS61A, DATA8, CourseTestCase, canvas_course
 
 
@@ -222,6 +223,31 @@ class SyncEmailTests(CourseTestCase):
         self.assertEqual(known.email, "new@test")
         self.assertEqual([s.id for s in known.sections], [self.section_id])
 
+    def test_someone_only_in_another_course_is_left_for_their_next_sign_in(self):
+        # DATA 8's staff imported the new email; there's nothing of it in CS 61A to merge.
+        elsewhere = User(email="new@test", name="Imported")
+        elsewhere.set_role(str(DATA8), is_staff=False)
+        elsewhere.sections.append(db.session.get(Section, self.data8_section_id))
+        db.session.add(elsewhere)
+        db.session.commit()
+        elsewhere_id = elsewhere.id
+
+        body = self.sync([entry("2", "new@test")])
+        self.assertTrue(body["success"], body)
+        self.assertIn("bCourses user 2 (known@test) has new@test on bCourses, but in Sections it belongs to "
+                      "someone in another course who hasn't signed in. It'll be updated when known@test next "
+                      "signs in to Sections.", body["data"]["custom"]["message"])
+        self.assertEqual(db.session.get(User, self.known_id).email, "known@test")
+        self.assertEqual(db.session.get(User, elsewhere_id).student_offerings, {str(DATA8)})
+
+        # Signing in merges them, in every course.
+        self.log_in_as("2", "new@test")
+        db.session.remove()
+        self.assertIsNone(db.session.get(User, elsewhere_id))
+        known = db.session.get(User, self.known_id)
+        self.assertEqual(known.email, "new@test")
+        self.assertEqual([s.id for s in known.sections], [self.data8_section_id])
+
     def test_an_email_belonging_to_another_bcourses_account_stays(self):
         # staff@test is Canvas user 1, so "known" (Canvas user 2) keeps their email.
         conflict = ("bCourses user 2 (known@test) has staff@test on bCourses, but in Sections it belongs to "
@@ -286,7 +312,7 @@ class MergeStudentsTests(CourseTestCase):
 
         body = self.merge()
         self.assertTrue(body["success"], body)
-        self.assertIn("old@test is still in other courses, so it's kept there.", body["data"]["custom"]["message"])
+        self.assertIn("old@test still has records outside this course, so it's kept.", body["data"]["custom"]["message"])
         old = db.session.get(User, self.old_id)
         self.assertEqual((old.student_offerings, old.staff_offerings, old.admin_offerings),
                          ({str(DATA8)}, {"cs70"}, {"cs70"}))
@@ -314,6 +340,108 @@ class MergeStudentsTests(CourseTestCase):
         self.assertEqual([a.status for a in known.attendances], [AttendanceStatus.absent])
         self.assertIsNone(db.session.get(User, self.old_id))
         self.assertEqual(Attendance.query.count(), 1)
+
+    def test_section_rosters_list_the_student_once(self):
+        self.assertTrue(self.merge()["success"])
+        roster = db.session.get(Section, self.section_id).students
+        self.assertEqual([student.id for student in roster], [self.known_id])
+        export = self.api("export_rosters").get_json()["data"]["custom"]["rosters"]
+        self.assertIn("known@test", export)
+        self.assertNotIn("old@test", export)
+
+    def test_moves_sections_of_types_the_student_has_none_of(self):
+        # old@test has a lab and a tutoring section; "known" joined another lab.
+        tutoring = Section(course="cs61a", name="Tutoring", location="T", description="", capacity=5,
+                           can_self_enroll=True, start_time=0, end_time=3600)
+        other_lab = Section(course="cs61a", name="Lab", location="Other", description="", capacity=30,
+                            can_self_enroll=True, start_time=0, end_time=3600)
+        old, known = db.session.get(User, self.old_id), db.session.get(User, self.known_id)
+        old.sections.append(tutoring)
+        known.sections.append(other_lab)
+        db.session.commit()
+        tutoring_id, other_lab_id = tutoring.id, other_lab.id
+
+        self.assertTrue(self.merge()["success"])
+        known = db.session.get(User, self.known_id)
+        self.assertEqual(sorted(s.id for s in known.sections), sorted([other_lab_id, tutoring_id]))
+        self.assertEqual(db.session.get(Section, self.section_id).students, [])
+        self.assertIsNone(db.session.get(User, self.old_id))
+
+    def assert_kept_but_emptied(self):
+        body = self.merge()
+        self.assertTrue(body["success"], body)
+        self.assertIn("still has records outside this course", body["data"]["custom"]["message"])
+        # Nothing of CS 61A's is left on it.
+        old = db.session.get(User, self.old_id)
+        self.assertNotIn("cs61a", old.student_offerings)
+        self.assertEqual([s.course for s in old.sections if s.course == "cs61a"], [])
+        self.assertEqual([a.course for a in old.attendances if a.course == "cs61a"], [])
+        known = db.session.get(User, self.known_id)
+        self.assertEqual([s.id for s in known.sections], [self.section_id])
+        self.assertEqual([a.course for a in known.attendances], ["cs61a"])
+
+    # Neither is expected for someone who never signed in, but nothing may be
+    # left pointing at a deleted user.
+    def test_keeps_a_record_with_a_canvas_token(self):
+        db.session.add(CanvasToken(user_id=self.old_id, handle_hash="h", access_token="a", expires_at=0))
+        db.session.commit()
+        self.assert_kept_but_emptied()
+
+    def test_keeps_a_record_with_an_api_key(self):
+        db.session.add(ApiKey(course="cs61a", owner_id=self.old_id, name="n", key_hash="k", hint="h",
+                              created_at=0))
+        db.session.commit()
+        self.assert_kept_but_emptied()
+
+    def test_keeps_a_record_that_is_a_student_in_another_course(self):
+        db.session.get(User, self.old_id).set_role(str(DATA8), is_staff=False)
+        db.session.commit()
+        self.assert_kept_but_emptied()
+
+    def test_keeps_a_record_on_staff_in_another_course(self):
+        db.session.get(User, self.old_id).set_role(str(DATA8), is_staff=True)
+        db.session.commit()
+        self.assert_kept_but_emptied()
+
+    def test_keeps_a_record_with_attendance_in_another_course(self):
+        session = Session(course=str(DATA8), start_time=0, section_id=self.data8_section_id)
+        db.session.add(Attendance(course=str(DATA8), status=AttendanceStatus.present, session=session,
+                                  student=db.session.get(User, self.old_id)))
+        db.session.commit()
+        body = self.merge()
+        self.assertTrue(body["success"], body)
+        old = db.session.get(User, self.old_id)
+        self.assertEqual([a.course for a in old.attendances], [str(DATA8)])
+        self.assertEqual([a.course for a in db.session.get(User, self.known_id).attendances], ["cs61a"])
+
+    def test_keeps_a_record_with_a_section_in_another_course(self):
+        # A discussion, a type "known" has none of anywhere, so only the course keeps it where it is.
+        discussion = Section(course=str(DATA8), name="Discussion", location="D", description="", capacity=30,
+                             can_self_enroll=True, start_time=0, end_time=3600)
+        old = db.session.get(User, self.old_id)
+        old.sections.append(discussion)
+        db.session.commit()
+        discussion_id = discussion.id
+        self.assertTrue(self.merge()["success"])
+        self.assertEqual([s.id for s in db.session.get(User, self.old_id).sections], [discussion_id])
+        self.assertEqual([s.id for s in db.session.get(User, self.known_id).sections], [self.section_id])
+
+    def test_keeps_a_record_teaching_a_section(self):
+        old = db.session.get(User, self.old_id)
+        db.session.get(Section, self.data8_section_id).staff = old
+        db.session.commit()
+        self.assert_kept_but_emptied()
+
+    def test_refuses_api_keys(self):
+        db.session.get(User, self.staff_id).canvas_synced_at = int(time.time())
+        db.session.commit()
+        key = self.api("create_api_key", name="Script").get_json()["data"]["key"]
+        body = self.post(f"/offerings/{CS61A}/api/sudo/merge_students", headers={"Authorization": f"Bearer {key}"},
+                         json={"args": {"from_email": "old@test", "into_email": "known@test"}}).get_json()
+        self.assertFalse(body["success"])
+        self.assertIn("can't be done with an API key", body["message"])
+        db.session.remove()
+        self.assertIsNotNone(db.session.get(User, self.old_id))
 
     def test_works_after_a_sync_removed_the_old_email(self):
         # bCourses only has the new email, so a sync drops old@test from the course.

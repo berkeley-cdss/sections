@@ -99,6 +99,19 @@ def test_admin_merges_a_student_imported_under_an_old_email(site, database):
         assert [user.email for user in session.get(Section, LAB_ID).students] == ["jimmyxu@example.com"]
 
 
+def test_a_failed_merge_shows_why_in_the_dialog(site, database):
+    site.visit(f"{OFFERING}/admin", TEACHER)
+    site.click("Roster Management", site.find('//*[@role="tablist"]'))
+    site.click("Merge Students")
+    dialog = site.find('//*[@role="dialog"]')
+    dialog.find_element(By.ID, "merge-from-email").send_keys("nobody@example.com")
+    dialog.find_element(By.ID, "merge-into-email").send_keys("jimmyxu@example.com")
+    site.click("Merge", dialog)
+    # Shown in the dialog, which stays open, rather than behind it.
+    site.wait(lambda: "No one in Sections has the email nobody@example.com." in dialog.text)
+    assert dialog.is_displayed()
+
+
 def test_students_cannot_open_the_admin_page(site):
     site.visit(f"{OFFERING}/", STUDENT)
     assert not site.has_text("Admin")

@@ -1,8 +1,9 @@
-import { useCallback, useContext, useRef, useState } from "react";
+import { useCallback, useContext, useMemo, useRef, useState } from "react";
 import Button from "react-bootstrap/Button";
 import Form from "react-bootstrap/Form";
 import Modal from "react-bootstrap/Modal";
-import MessageContext from "./MessageContext";
+import MessageContext, { type Message } from "./MessageContext";
+import Messages from "./Messages";
 import useStateAPI from "./useStateAPI";
 
 type Props = {
@@ -11,7 +12,45 @@ type Props = {
 };
 
 export default function MergeStudentsModal({ show, onClose }: Props) {
-  const { pushMessage } = useContext(MessageContext);
+  // The page's messages are hidden behind the modal, so errors are shown in
+  // it instead. The success message goes to the page, which the modal closes onto.
+  const { pushMessage: pushPageMessage } = useContext(MessageContext);
+  const [errors, setErrors] = useState<Array<Message>>([]);
+  const modalMessages = useMemo(
+    () => ({
+      pushMessage: (text: string) =>
+        setErrors((current) => current.concat([{ text, variant: "danger" }])),
+    }),
+    [],
+  );
+  const close = () => {
+    setErrors([]);
+    onClose();
+  };
+  return (
+    <MessageContext.Provider value={modalMessages}>
+      <MergeStudentsForm
+        show={show}
+        onClose={close}
+        errors={errors}
+        setErrors={setErrors}
+        pushPageMessage={pushPageMessage}
+      />
+    </MessageContext.Provider>
+  );
+}
+
+function MergeStudentsForm({
+  show,
+  onClose,
+  errors,
+  setErrors,
+  pushPageMessage,
+}: Props & {
+  errors: Array<Message>;
+  setErrors: (errors: Array<Message>) => void;
+  pushPageMessage: (text: string, variant: "success") => void;
+}) {
   const [fromEmail, setFromEmail] = useState("");
   const [intoEmail, setIntoEmail] = useState("");
   const [merging, setMerging] = useState(false);
@@ -26,21 +65,22 @@ export default function MergeStudentsModal({ show, onClose }: Props) {
   }
 
   // Set by the success callback, so the modal stays open after a failure,
-  // which has already shown its error at the top of the page.
+  // showing its error.
   const merged = useRef(false);
   const merge = useStateAPI(
     "merge_students",
     useCallback(
       ({ custom }: { custom: { message?: string | null } }) => {
         merged.current = true;
-        pushMessage(custom.message ?? "Merged.", "success");
+        pushPageMessage(custom.message ?? "Merged.", "success");
       },
-      [pushMessage],
+      [pushPageMessage],
     ),
   );
 
   const onSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
+    setErrors([]);
     merged.current = false;
     setMerging(true);
     await merge({ from_email: fromEmail, into_email: intoEmail });
@@ -57,6 +97,7 @@ export default function MergeStudentsModal({ show, onClose }: Props) {
           <Modal.Title>Merge Students</Modal.Title>
         </Modal.Header>
         <Modal.Body>
+          <Messages messages={errors} onChange={setErrors} />
           <p>
             For a student who is in Sections twice, under two emails, because
             their email changed: once under an email no one has signed in with
