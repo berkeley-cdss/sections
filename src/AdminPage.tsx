@@ -25,6 +25,7 @@ import AddStudentModal from "./AddStudentModal";
 import ResetSectionsModal from "./ResetSectionsModal";
 import StudentSearch from "./StudentSearch";
 import SyncBcoursesModal from "./SyncBcoursesModal";
+import MergeStudentsModal from "./MergeStudentsModal";
 import MessageContext from "./MessageContext";
 
 type ConfigKey = Exclude<keyof CourseConfig, "message" | "staffUrl">;
@@ -138,6 +139,7 @@ export default function AdminPage(): React.ReactNode {
   const [showImportSectionsModal, setShowImportSectionsModal] = useState(false);
   const [showImportEnrollmentModal, setShowImportEnrollmentModal] = useState(false);
   const [showSyncBcoursesModal, setShowSyncBcoursesModal] = useState(false);
+  const [showMergeStudentsModal, setShowMergeStudentsModal] = useState(false);
   const [message, setMessage] = useState(config.message);
   const [staffUrl, setStaffUrl] = useState(config.staffUrl ?? "");
   const [savingStaffUrl, setSavingStaffUrl] = useState(false);
@@ -321,7 +323,15 @@ export default function AdminPage(): React.ReactNode {
                 </Button>{" "}
                 <Button variant="secondary" onClick={() => setShowImportEnrollmentModal(true)}>
                   Import Section Assignments
+                </Button>{" "}
+                <Button variant="secondary" onClick={() => setShowMergeStudentsModal(true)}>
+                  Merge Students
                 </Button>
+              </p>
+              <p className="text-muted small">
+                Syncing also updates the emails of students whose bCourses email has changed. If a student changed
+                their email before they first signed in to Sections, they&rsquo;re in Sections twice, once under each
+                email: use &ldquo;Merge Students&rdquo; to combine them.
               </p>
 
               <StudentSearch />
@@ -417,6 +427,7 @@ export default function AdminPage(): React.ReactNode {
         onClose={() => setShowImportEnrollmentModal(false)}
       />
       <SyncBcoursesModal show={showSyncBcoursesModal} onClose={() => setShowSyncBcoursesModal(false)} />
+      <MergeStudentsModal show={showMergeStudentsModal} onClose={() => setShowMergeStudentsModal(false)} />
     </Container>
   );
 }
