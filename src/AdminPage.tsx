@@ -341,7 +341,7 @@ export default function AdminPage(): React.ReactNode {
                 <li>
                   &ldquo;Export Section Assignments&rdquo; (CSV) has one row per student per section, in the format
                   &ldquo;Import Section Assignments&rdquo; reads, so you can export, edit the spreadsheet, and import
-                  it back. Students in no section aren&rsquo;t in it.
+                  it back. Students with no section assignments aren&rsquo;t in it.
                 </li>
                 <li>
                   &ldquo;Export Full Attendances&rdquo; (JSON) has every attendance record, by section type and
