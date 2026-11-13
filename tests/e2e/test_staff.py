@@ -49,3 +49,27 @@ def test_teacher_adds_and_removes_students_from_the_roster(site, database):
             return ([student.email for student in session.get(Section, LAB_ID).students],
                     session.get(User, STUDENT_ID).sections)
     site.wait(lambda: roster() == (["sharon@berkeley.edu"], []))
+
+
+def test_ta_deletes_a_session_started_by_mistake(site, database):
+    def sessions():
+        with database():
+            return Session.query.filter_by(section_id=LAB_ID).count()
+
+    site.visit(f"{OFFERING}/section/{LAB_ID}", TA)
+    assert attendance_of(database) == [AttendanceStatus.present]
+    # The seeded session is the only one started, so the only one with a Delete button.
+    # Not site.click, which can't wait behind the confirm dialog.
+    site.button("Delete").click()
+    assert "Its attendance for 1 student will be deleted too." in site.driver.switch_to.alert.text
+    site.driver.switch_to.alert.dismiss()
+    site.settle()
+    assert sessions() == 1
+
+    site.button("Delete").click()
+    site.driver.switch_to.alert.accept()
+    site.settle()
+    site.wait(lambda: not site.driver.find_elements("xpath", '//button[normalize-space()="Delete"]'))
+    assert site.has_text("(not started)")
+    assert sessions() == 0
+    assert attendance_of(database) == []

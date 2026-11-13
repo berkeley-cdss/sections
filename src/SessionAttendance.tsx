@@ -24,6 +24,21 @@ const CardHeader = styled.div`
   align-items: center;
 `;
 
+const ButtonGroup = styled.div`
+  display: flex;
+  gap: 0.5em;
+`;
+
+function deleteQuestion(session: Session): string {
+  const date = moment.unix(session.startTime).format("MMMM D");
+  const count = session.attendances.length;
+  const attendance =
+    count === 0
+      ? "No attendance has been taken in it."
+      : `Its attendance for ${count} ${count === 1 ? "student" : "students"} will be deleted too.`;
+  return `Delete the ${date} session? ${attendance} This can't be undone.`;
+}
+
 type Props = {
   section: SectionDetails;
   session?: Session | null;
@@ -32,6 +47,7 @@ type Props = {
 export default function SessionAttendance({ section, session }: Props) {
   const startSession = useSectionAPI("start_session");
   const setAttendance = useSectionAPI("set_attendance");
+  const deleteSession = useSectionAPI("delete_session");
 
   const { currentUser } = useContext(StateContext);
   const canEdit = canEditSection(currentUser, section);
@@ -101,9 +117,23 @@ export default function SessionAttendance({ section, session }: Props) {
                 Start Session
               </Button>
             ) : (
-              <Button variant="secondary" size="sm" onClick={() => setAdding(true)}>
-                Add Students
-              </Button>
+              <ButtonGroup>
+                <Button variant="secondary" size="sm" onClick={() => setAdding(true)}>
+                  Add Students
+                </Button>
+                <Button
+                  variant="danger"
+                  size="sm"
+                  aria-label={`Delete the ${moment.unix(session.startTime).format("MMMM D")} session`}
+                  onClick={() => {
+                    if (window.confirm(deleteQuestion(session))) {
+                      deleteSession({ session_id: session.id });
+                    }
+                  }}
+                >
+                  Delete
+                </Button>
+              </ButtonGroup>
             )}
           </CardHeader>
         </Card.Header>

@@ -29,6 +29,8 @@ class SectionEditorTests(CourseTestCase):
                                 "status": "absent"}),
             ("remove_student", {"student": "known@test", "section_id": section_id}),
             ("add_students", {"emails": "known@test", "section_id": section_id}),
+            # Last: it removes the session the edits above use.
+            ("delete_session", {"session_id": str(self.session_id)}),
         ]
 
     def test_other_staff_cannot_edit_the_section(self):
