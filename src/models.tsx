@@ -127,7 +127,7 @@ export function getEnrollmentCount(section: Section): number {
   return section.enrollmentCount ?? section.students.length;
 }
 
-export function nextSessionStartTime(section: Section, dayOffset: number = 0) {
+export function nextSessionStartTime(section: Pick<Section, "startTime">, dayOffset: number = 0) {
   const time = moment.unix(section.startTime).tz(TZ);
   while (time.isBefore(moment().add(dayOffset, "days"))) {
     time.add(7, "days");
@@ -145,7 +145,7 @@ export function sessionStartTimes(section: Section) {
   return out;
 }
 
-export function sectionInterval(section: Section): React.ReactElement {
+export function sectionInterval(section: Pick<Section, "startTime" | "endTime">): React.ReactElement {
   const isPT = moment.tz.guess() === TZ;
   const useLocalString = document.cookie
     .split("; ")

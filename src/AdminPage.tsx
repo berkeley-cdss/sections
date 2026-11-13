@@ -20,8 +20,10 @@ import type { CourseConfig } from "./models";
 import StateContext from "./StateContext";
 import ToggleSwitch from "./ToggleSwitch";
 import useAPI from "./useStateAPI";
+import useBareAPI from "./useAPI";
 import AddStudentModal from "./AddStudentModal";
 import ResetSectionsModal from "./ResetSectionsModal";
+import StudentSearch from "./StudentSearch";
 import SyncBcoursesModal from "./SyncBcoursesModal";
 import MessageContext from "./MessageContext";
 
@@ -161,6 +163,13 @@ export default function AdminPage(): React.ReactNode {
     }
     downloadText(rosters, fileName);
   });
+  // Doesn't change the state, so no need to refresh it.
+  const exportStudents = useBareAPI(
+    "export_students",
+    useCallback(({ custom: { students, fileName } }: { custom: { students: string; fileName: string } }) => {
+      downloadText(students, fileName);
+    }, [])
+  );
   const fetchToDrop = useAPI("fetch_to_drop", ({ custom: { students } }) => {
     if (students == null) {
       return;
@@ -237,13 +246,14 @@ export default function AdminPage(): React.ReactNode {
       <h1 className="h2">Admin Settings</h1>
       <Row>
         <Col>
-          <Tabs defaultActiveKey="general">
+          <Tabs defaultActiveKey="general" className="mb-3">
             <Tab eventKey="general" title="General">
               <div className="mb-3">
                 Welcome message:
                 <InputGroup>
                   <FormControl
                     as="textarea"
+                    rows={4}
                     placeholder="Write a short welcome message for students"
                     value={message}
                     onChange={(e) => setMessage(e.target.value)}
@@ -289,37 +299,63 @@ export default function AdminPage(): React.ReactNode {
                   </Alert>
                 ) : null}
               </div>
-
-              {/* Line 1: Import Buttons */}
+            </Tab>
+            <Tab eventKey="roster" title="Roster Management">
+              <p className="mb-1">At the start of the semester, start by:</p>
+              <ol>
+                <li>syncing the bCourses student roster,</li>
+                <li>importing sections,</li>
+                <li>importing section assignments.</li>
+              </ol>
               <p>
+                It is safe to run any of these steps again. For example, if you want to drop students from sections
+                who have dropped your course, re-run the bCourses sync. You can also add more sections after your
+                initial setup, and assign students in multiple rounds (like if they added the course late).
+              </p>
+              <p>
+                <Button variant="secondary" onClick={() => setShowSyncBcoursesModal(true)}>
+                  Sync bCourses Students
+                </Button>{" "}
                 <Button variant="secondary" onClick={() => setShowImportSectionsModal(true)}>
                   Import Sections
                 </Button>{" "}
                 <Button variant="secondary" onClick={() => setShowImportEnrollmentModal(true)}>
                   Import Section Assignments
-                </Button>{" "}
-                <Button variant="secondary" onClick={() => setShowSyncBcoursesModal(true)}>
-                  Sync bCourses
                 </Button>
               </p>
 
-              {/* Line 2: Export Buttons */}
+              <StudentSearch />
+
               <p>
                 <Button variant="secondary" onClick={() => exportRosters({})}>
-                  Export Rosters
+                  Export Section Assignments
                 </Button>{" "}
                 <Button variant="secondary" onClick={() => exportAttendance({})}>
                   Export Full Attendances
+                </Button>{" "}
+                <Button variant="secondary" onClick={() => exportStudents({})}>
+                  Export Students
                 </Button>
               </p>
+              <ul className="text-muted small">
+                <li>
+                  &ldquo;Export Section Assignments&rdquo; (CSV) has one row per student per section, in the format
+                  &ldquo;Import Section Assignments&rdquo; reads, so you can export, edit the spreadsheet, and import
+                  it back. Students with no section assignments aren&rsquo;t in it.
+                </li>
+                <li>
+                  &ldquo;Export Full Attendances&rdquo; (JSON) has every attendance record, by section type and
+                  student. All students who have had attendance recorded are included in this export, even if the
+                  student has been removed from a section or this course offering.
+                </li>
+                <li>
+                  &ldquo;Export Students&rdquo; (CSV) has one row per student in the offering, with their section of
+                  each type, or &ldquo;Floating&rdquo; if they have no lab or discussion section. Run &ldquo;Sync
+                  bCourses Students&rdquo; first so it includes students who&rsquo;ve just joined and leaves out
+                  those who&rsquo;ve dropped.
+                </li>
+              </ul>
 
-              {/* Line 3: Description Text */}
-              <p>
-                The following will obtain emails of students who have at least one unexcused absence
-                or 3 excused absences in their enrolled tutoring section.
-              </p>
-
-              {/* Line 4: Copy Students to Drop */}
               <p>
                 <Button variant="secondary" onClick={() => fetchToDrop()}>
                   Copy Students To Drop (Tutoring)
@@ -334,8 +370,11 @@ export default function AdminPage(): React.ReactNode {
                   onClose={() => setRemovingTutoring(false)}
                 />
               </p>
+              <p className="text-muted small">
+                &ldquo;Copy Students To Drop (Tutoring)&rdquo; copies the emails of students who have at least one
+                unexcused absence or 3 excused absences in their tutoring section.
+              </p>
 
-              {/* Line 5: Admin Management Actions */}
               {currentUser?.isAdmin && (
                 <p>
                   <Button variant="danger" onClick={() => setRemoving(true)}>
