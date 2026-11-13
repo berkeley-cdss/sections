@@ -192,7 +192,7 @@ class SyncEmailTests(CourseTestCase):
         self.sync([entry("2", None)])
         self.assertEqual(db.session.get(User, self.known_id).email, "known@test")
 
-    def test_someone_imported_under_the_new_email_is_merged(self):
+    def test_someone_imported_under_the_new_email_is_left_for_an_admin_to_merge(self):
         # Staff imported the student's new email before the student's next sign-in.
         imported = User(email="new@test", name="Imported")
         imported.set_role("cs61a", is_staff=False)
@@ -203,24 +203,37 @@ class SyncEmailTests(CourseTestCase):
 
         body = self.sync([entry("2", "new@test")])
         self.assertTrue(body["success"], body)
-        self.assertIn("Updated 1 emails: known@test → new@test.", body["data"]["custom"]["message"])
+        self.assertIn("bCourses user 2 (known@test) has new@test on bCourses, but in Sections it belongs to "
+                      "someone who hasn't signed in. Use Merge Students to merge new@test into known@test, "
+                      "then sync again.", body["data"]["custom"]["message"])
+        self.assertEqual(db.session.get(User, self.known_id).email, "known@test")
+        # Kept in the course, with their section, until they're merged.
+        imported = db.session.get(User, imported_id)
+        self.assertEqual((imported.student_offerings, [s.id for s in imported.sections]), ({"cs61a"}, [self.section_id]))
+
+        # Which an admin does, and the next sync updates the email.
+        body = self.api("merge_students", from_email="new@test", into_email="known@test").get_json()
+        self.assertTrue(body["success"], body)
+        db.session.remove()
         self.assertIsNone(db.session.get(User, imported_id))
+        body = self.sync([entry("2", "new@test")])
+        self.assertIn("Updated 1 emails: known@test → new@test.", body["data"]["custom"]["message"])
         known = db.session.get(User, self.known_id)
         self.assertEqual(known.email, "new@test")
         self.assertEqual([s.id for s in known.sections], [self.section_id])
 
     def test_an_email_belonging_to_another_bcourses_account_stays(self):
         # staff@test is Canvas user 1, so "known" (Canvas user 2) keeps their email.
-        conflict = ("bCourses user 2 (known@test) has staff@test on bCourses, "
-                    "but in Sections it belongs to bCourses user 1")
+        conflict = ("bCourses user 2 (known@test) has staff@test on bCourses, but in Sections it belongs to "
+                    "bCourses user 1. Contact the Sections maintainers")
         body = self.sync([entry("2", "staff@test")], method="preview_bcourses_sync")
         self.assertEqual((body["data"]["updated"], body["data"]["conflicts"]), ([], [conflict]))
         with self.assertLogs(self.app.logger, "WARNING") as logs:
             body = self.sync([entry("2", "staff@test")])
         self.assertTrue(body["success"], body)
         self.assertEqual(body["data"]["custom"]["message"],
-                         "Added 0 students and removed 0. Didn't update 1 emails that belong to a different "
-                         f"bCourses account in Sections: {conflict}.")
+                         f"Added 0 students and removed 0. Didn't update 1 emails that belong to someone else "
+                         f"in Sections: {conflict}.")
         self.assertEqual([record.getMessage() for record in logs.records],
                          [f"bCourses sync in cs61a didn't update an email: {conflict}"])
         self.assertEqual(db.session.get(User, self.known_id).email, "known@test")
@@ -228,8 +241,8 @@ class SyncEmailTests(CourseTestCase):
 
 
 class MergeStudentsTests(CourseTestCase):
-    """Admins merging a student imported under an old email into the same
-    student under their new one."""
+    """Admins moving a student's records in their course from a record no one
+    has signed in with to the same student's other record."""
 
     def setUp(self):
         super().setUp()
@@ -245,20 +258,62 @@ class MergeStudentsTests(CourseTestCase):
         db.session.commit()
         self.old_id = old.id
 
-    def merge(self, old_email="old@test", new_email="known@test"):
-        body = self.api("merge_students", old_email=old_email, new_email=new_email).get_json()
+    def merge(self, from_email="old@test", into_email="known@test"):
+        body = self.api("merge_students", from_email=from_email, into_email=into_email).get_json()
         db.session.remove()
         return body
 
-    def test_moves_sections_and_attendance(self):
+    def test_moves_sections_and_attendance_and_removes_the_empty_record(self):
         body = self.merge(" OLD@test ")
         self.assertTrue(body["success"], body)
-        self.assertEqual(body["data"]["custom"]["message"], "Merged OLD@test into known@test.")
+        self.assertEqual(body["data"]["custom"]["message"],
+                         "Moved old@test's sections and attendance in this course to known@test and removed old@test.")
         self.assertIsNone(db.session.get(User, self.old_id))
         known = db.session.get(User, self.known_id)
         self.assertEqual([s.id for s in known.sections], [self.section_id])
         self.assertEqual(Attendance.query.filter_by(student_id=self.known_id).count(), 1)
-        self.assertEqual(known.canvas_id, "2")
+        self.assertEqual((known.canvas_id, known.email), ("2", "known@test"))
+
+    def test_leaves_other_courses_alone(self):
+        # old@test is also a student in DATA 8, and staff in another course.
+        old = db.session.get(User, self.old_id)
+        old.set_role(str(DATA8), is_staff=False)
+        old.set_role("cs70", is_staff=True, is_admin=True)
+        old.sections.append(db.session.get(Section, self.data8_section_id))
+        session = Session(course=str(DATA8), start_time=0, section_id=self.data8_section_id)
+        db.session.add(Attendance(course=str(DATA8), status=AttendanceStatus.present, session=session, student=old))
+        db.session.commit()
+
+        body = self.merge()
+        self.assertTrue(body["success"], body)
+        self.assertIn("old@test is still in other courses, so it's kept there.", body["data"]["custom"]["message"])
+        old = db.session.get(User, self.old_id)
+        self.assertEqual((old.student_offerings, old.staff_offerings, old.admin_offerings),
+                         ({str(DATA8)}, {"cs70"}, {"cs70"}))
+        self.assertEqual([s.id for s in old.sections], [self.data8_section_id])
+        self.assertEqual([a.course for a in old.attendances], [str(DATA8)])
+        known = db.session.get(User, self.known_id)
+        self.assertEqual((known.student_offerings, known.staff_offerings), ({"cs61a"}, set()))
+        self.assertEqual([s.id for s in known.sections], [self.section_id])
+        self.assertEqual([a.course for a in known.attendances], ["cs61a"])
+
+    def test_keeps_the_students_own_section_and_attendance(self):
+        # "known" joined another lab and was marked absent for the same session.
+        known = db.session.get(User, self.known_id)
+        other_lab = Section(course="cs61a", name="Lab", location="Other", description="", capacity=30,
+                            can_self_enroll=True, start_time=0, end_time=3600)
+        known.sections.append(other_lab)
+        session = Session.query.filter_by(course="cs61a").one()
+        db.session.add(Attendance(course="cs61a", status=AttendanceStatus.absent, session=session, student=known))
+        db.session.commit()
+        other_lab_id = other_lab.id
+
+        self.assertTrue(self.merge()["success"])
+        known = db.session.get(User, self.known_id)
+        self.assertEqual([s.id for s in known.sections], [other_lab_id])
+        self.assertEqual([a.status for a in known.attendances], [AttendanceStatus.absent])
+        self.assertIsNone(db.session.get(User, self.old_id))
+        self.assertEqual(Attendance.query.count(), 1)
 
     def test_works_after_a_sync_removed_the_old_email(self):
         # bCourses only has the new email, so a sync drops old@test from the course.
@@ -268,6 +323,7 @@ class MergeStudentsTests(CourseTestCase):
         db.session.commit()
         self.assertTrue(self.merge()["success"])
         self.assertEqual(Attendance.query.filter_by(student_id=self.known_id).count(), 1)
+        self.assertIsNone(db.session.get(User, self.old_id))
 
     def test_refuses_an_email_someone_signed_in_with(self):
         old = db.session.get(User, self.old_id)
@@ -278,13 +334,13 @@ class MergeStudentsTests(CourseTestCase):
         self.assertIn("signed in", body["message"])
         self.assertIsNotNone(db.session.get(User, self.old_id))
 
-    def test_refuses_staff(self):
+    def test_refuses_staff_in_this_course(self):
         old = db.session.get(User, self.old_id)
-        old.set_role(str(DATA8), is_staff=True)
+        old.set_role("cs61a", is_staff=True)
         db.session.commit()
         body = self.merge()
         self.assertFalse(body["success"])
-        self.assertIn("on staff", body["message"])
+        self.assertIn("on staff in this course", body["message"])
 
     def test_refuses_someone_from_another_course(self):
         other = User(email="elsewhere@test", name="Elsewhere")
@@ -296,13 +352,13 @@ class MergeStudentsTests(CourseTestCase):
         self.assertIn("isn't a student in this course", body["message"])
 
     def test_refuses_merging_into_someone_not_a_student_here(self):
-        body = self.merge(new_email="staff@test")
+        body = self.merge(into_email="staff@test")
         self.assertFalse(body["success"])
         self.assertIn("isn't a student in this course", body["message"])
 
     def test_refuses_unknown_and_identical_emails(self):
         self.assertIn("No one", self.merge("nobody@test")["message"])
-        self.assertIn("No one", self.merge(new_email="nobody@test")["message"])
+        self.assertIn("No one", self.merge(into_email="nobody@test")["message"])
         self.assertIn("same student", self.merge("old@test", "OLD@test")["message"])
 
     def test_admins_only(self):

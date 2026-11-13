@@ -89,10 +89,11 @@ def test_admin_merges_a_student_imported_under_an_old_email(site, database):
     site.click("Roster Management", site.find('//*[@role="tablist"]'))
     site.click("Merge Students")
     dialog = site.find('//*[@role="dialog"]')
-    dialog.find_element(By.ID, "merge-old-email").send_keys("old-jimmy@example.com")
-    dialog.find_element(By.ID, "merge-new-email").send_keys("jimmyxu@example.com")
+    dialog.find_element(By.ID, "merge-from-email").send_keys("old-jimmy@example.com")
+    dialog.find_element(By.ID, "merge-into-email").send_keys("jimmyxu@example.com")
     site.click("Merge", dialog)
-    site.wait(lambda: site.has_text("Merged old-jimmy@example.com into jimmyxu@example.com."))
+    site.wait(lambda: site.has_text("Moved old-jimmy@example.com's sections and attendance in this course to "
+                                    "jimmyxu@example.com and removed old-jimmy@example.com."))
     with database() as session:
         assert session.query(User).filter_by(email="old-jimmy@example.com").one_or_none() is None
         assert [user.email for user in session.get(Section, LAB_ID).students] == ["jimmyxu@example.com"]

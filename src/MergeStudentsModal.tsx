@@ -12,16 +12,16 @@ type Props = {
 
 export default function MergeStudentsModal({ show, onClose }: Props) {
   const { pushMessage } = useContext(MessageContext);
-  const [oldEmail, setOldEmail] = useState("");
-  const [newEmail, setNewEmail] = useState("");
+  const [fromEmail, setFromEmail] = useState("");
+  const [intoEmail, setIntoEmail] = useState("");
   const [merging, setMerging] = useState(false);
   // Clear the inputs whenever the modal closes.
   const [prevShow, setPrevShow] = useState(show);
   if (show !== prevShow) {
     setPrevShow(show);
     if (!show) {
-      setOldEmail("");
-      setNewEmail("");
+      setFromEmail("");
+      setIntoEmail("");
     }
   }
 
@@ -43,7 +43,7 @@ export default function MergeStudentsModal({ show, onClose }: Props) {
     event.preventDefault();
     merged.current = false;
     setMerging(true);
-    await merge({ old_email: oldEmail, new_email: newEmail });
+    await merge({ from_email: fromEmail, into_email: intoEmail });
     setMerging(false);
     if (merged.current) {
       onClose();
@@ -58,33 +58,34 @@ export default function MergeStudentsModal({ show, onClose }: Props) {
         </Modal.Header>
         <Modal.Body>
           <p>
-            For a student whose email changed before they first signed in to
-            Sections: they were added under their old email (by a spreadsheet
-            import or by staff), and signing in added them again under their new
-            one. Merging moves the old email&rsquo;s sections and attendance to
-            the new one and deletes the old one.
+            For a student who is in Sections twice, under two emails, because
+            their email changed: once under an email no one has signed in with
+            (from a spreadsheet import or added by staff), and once under the
+            email they signed in with.
           </p>
           <p>
-            Only an email no one has signed in with can be merged. Students who
-            have signed in get their new email the next time they sign in, or
-            when you sync bCourses students.
+            Merging moves the first email&rsquo;s sections and attendance in
+            this course to the second, and removes the first if it isn&rsquo;t
+            in any other course. Nothing in other courses changes.
           </p>
-          <Form.Group className="mb-3" controlId="merge-old-email">
-            <Form.Label>Old email</Form.Label>
+          <Form.Group className="mb-3" controlId="merge-from-email">
+            <Form.Label>
+              Merge from (an email no one has signed in with)
+            </Form.Label>
             <Form.Control
               type="email"
               required
-              value={oldEmail}
-              onChange={(e) => setOldEmail(e.target.value)}
+              value={fromEmail}
+              onChange={(e) => setFromEmail(e.target.value)}
             />
           </Form.Group>
-          <Form.Group controlId="merge-new-email">
-            <Form.Label>New email</Form.Label>
+          <Form.Group controlId="merge-into-email">
+            <Form.Label>Into (the email they signed in with)</Form.Label>
             <Form.Control
               type="email"
               required
-              value={newEmail}
-              onChange={(e) => setNewEmail(e.target.value)}
+              value={intoEmail}
+              onChange={(e) => setIntoEmail(e.target.value)}
             />
           </Form.Group>
         </Modal.Body>

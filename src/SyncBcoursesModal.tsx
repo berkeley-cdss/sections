@@ -124,11 +124,9 @@ export default function SyncBcoursesModal({ show, onClose }: Props) {
             {preview.conflicts.length > 0 && (
               <>
                 <p className="mt-3 mb-1">
-                  {preview.conflicts.length} students&rsquo; new emails
-                  won&rsquo;t be updated. bCourses gives them an email that
-                  already belongs to someone in Sections with a different
-                  bCourses account. Contact the Sections maintainers to sort
-                  these out.
+                  {preview.conflicts.length} students&rsquo; emails won&rsquo;t
+                  be updated, because their new email on bCourses already
+                  belongs to someone else in Sections. Each one says what to do.
                 </p>
                 <EmailList
                   title={`Emails not updated (${preview.conflicts.length})`}

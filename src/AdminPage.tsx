@@ -329,9 +329,9 @@ export default function AdminPage(): React.ReactNode {
                 </Button>
               </p>
               <p className="text-muted small">
-                Syncing also updates the emails of students whose bCourses email has changed. If a student changed
-                their email before they first signed in to Sections, they&rsquo;re in Sections twice, once under each
-                email: use &ldquo;Merge Students&rdquo; to combine them.
+                Syncing also updates the emails of students whose bCourses email has changed. If a student is in
+                Sections twice, under an email no one has signed in with and the one they signed in with (the sync
+                lists these), use &ldquo;Merge Students&rdquo; to move this course&rsquo;s records to one of them.
               </p>
 
               <StudentSearch />
