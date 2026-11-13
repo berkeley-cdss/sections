@@ -15,6 +15,7 @@ type Preview = {
   added: Array<string>;
   removed: Array<string>;
   updated: Array<string>;
+  conflicts: Array<string>;
   skipped: Array<string>;
   no_email: Array<string>;
 };
@@ -120,6 +121,21 @@ export default function SyncBcoursesModal({ show, onClose }: Props) {
               title={`Emails to update (${preview.updated.length})`}
               emails={preview.updated}
             />
+            {preview.conflicts.length > 0 && (
+              <>
+                <p className="mt-3 mb-1">
+                  {preview.conflicts.length} students&rsquo; new emails
+                  won&rsquo;t be updated. bCourses gives them an email that
+                  already belongs to someone in Sections with a different
+                  bCourses account. Contact the Sections maintainers to sort
+                  these out.
+                </p>
+                <EmailList
+                  title={`Emails not updated (${preview.conflicts.length})`}
+                  emails={preview.conflicts}
+                />
+              </>
+            )}
             {preview.skipped.length > 0 && (
               <>
                 <p className="mt-3 mb-1">

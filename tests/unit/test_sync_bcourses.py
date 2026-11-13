@@ -89,7 +89,7 @@ class SyncBcoursesTests(CourseTestCase):
         body = self.sync([entry("4", "new@test")], method="preview_bcourses_sync")
         self.assertTrue(body["success"], body)
         self.assertEqual(body["data"], {"added": ["new@test"], "removed": ["known@test"], "updated": [],
-                                        "skipped": [], "no_email": []})
+                                        "conflicts": [], "skipped": [], "no_email": []})
         self.assertEqual(self.students(), {"known@test"})
         self.assertIsNone(User.query.filter_by(email="new@test").one_or_none())
 
@@ -97,7 +97,8 @@ class SyncBcoursesTests(CourseTestCase):
         # staff@test is Canvas user 1 here, so Canvas user 8 with that login isn't added.
         roster = [entry("2", "known@test"), entry("8", "staff@test")]
         body = self.sync(roster, method="preview_bcourses_sync")
-        self.assertEqual(body["data"], {"added": [], "removed": [], "updated": [], "skipped": ["staff@test"], "no_email": []})
+        self.assertEqual(body["data"], {"added": [], "removed": [], "updated": [], "conflicts": [],
+                                        "skipped": ["staff@test"], "no_email": []})
         body = self.sync(roster)
         self.assertTrue(body["success"], body)
         self.assertEqual(body["data"]["custom"]["message"],
@@ -126,7 +127,8 @@ class SyncBcoursesTests(CourseTestCase):
         listen = sqlalchemy.event.listens_for(db.engine, "before_cursor_execute")
         listen(lambda *args: statements.append(args[2]))
         body = self.sync(roster, method="preview_bcourses_sync")
-        self.assertEqual(body["data"], {"added": [], "removed": [], "updated": [], "skipped": [], "no_email": []})
+        self.assertEqual(body["data"], {"added": [], "removed": [], "updated": [], "conflicts": [],
+                                        "skipped": [], "no_email": []})
         self.assertLess(len(statements), 15, statements)
 
     def test_empty_roster_changes_nothing(self):
@@ -209,8 +211,18 @@ class SyncEmailTests(CourseTestCase):
 
     def test_an_email_belonging_to_another_bcourses_account_stays(self):
         # staff@test is Canvas user 1, so "known" (Canvas user 2) keeps their email.
-        body = self.sync([entry("2", "staff@test")])
+        conflict = ("bCourses user 2 (known@test) has staff@test on bCourses, "
+                    "but in Sections it belongs to bCourses user 1")
+        body = self.sync([entry("2", "staff@test")], method="preview_bcourses_sync")
+        self.assertEqual((body["data"]["updated"], body["data"]["conflicts"]), ([], [conflict]))
+        with self.assertLogs(self.app.logger, "WARNING") as logs:
+            body = self.sync([entry("2", "staff@test")])
         self.assertTrue(body["success"], body)
+        self.assertEqual(body["data"]["custom"]["message"],
+                         "Added 0 students and removed 0. Didn't update 1 emails that belong to a different "
+                         f"bCourses account in Sections: {conflict}.")
+        self.assertEqual([record.getMessage() for record in logs.records],
+                         [f"bCourses sync in cs61a didn't update an email: {conflict}"])
         self.assertEqual(db.session.get(User, self.known_id).email, "known@test")
         self.assertEqual(db.session.get(User, self.staff_id).email, "staff@test")
 

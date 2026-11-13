@@ -821,11 +821,11 @@ def create_state_client(app: flask.Flask):
         by_email = {user.email.lower(): user for user in User.query.filter(func.lower(User.email).in_(emails))}
 
         on_roster = set()
-        changes = {"added": [], "removed": [], "updated": [], "skipped": [], "no_email": []}
+        changes = {"added": [], "removed": [], "updated": [], "conflicts": [], "skipped": [], "no_email": []}
         for entry in roster:
             person = by_canvas_id.get(entry["canvas_id"])
             if person is not None:
-                update_email(person, (entry["email"] or "").strip(), by_email, changes["updated"])
+                update_email(person, (entry["email"] or "").strip(), by_email, changes)
             else:
                 email = (entry["email"] or "").strip()
                 if not email:
@@ -870,19 +870,24 @@ def create_state_client(app: flask.Flask):
                                 time.perf_counter() - fetched_at)
         return {key: sorted(values) for key, values in changes.items()}
 
-    def update_email(person: User, email: str, by_email: dict, updated: list):
+    def update_email(person: User, email: str, by_email: dict, changes: dict):
         """Give ``person`` their email on bCourses, as signing in would, if it
-        has changed. Someone imported under that email who hasn't signed in is
-        the same person, so they're merged; if it belongs to someone with
-        another bCourses account, the email is left alone."""
+        has changed. A record under that email that no one has signed in with
+        (imported, or added by staff) is the same person, as bCourses says the
+        email is theirs, so it's merged into them. If the email belongs to
+        someone with another bCourses account, it's left alone and added to
+        ``changes["conflicts"]``, for a person to sort out."""
         if not email or email.lower() == person.email.lower():
             return
         owner = by_email.get(email.lower())
         if owner is not None and owner is not person:
             if owner.canvas_id is not None:
+                changes["conflicts"].append(
+                    f"bCourses user {person.canvas_id} ({person.email}) has {email} on bCourses, "
+                    f"but in Sections it belongs to bCourses user {owner.canvas_id}")
                 return
             person.absorb(owner)
-        updated.append(f"{person.email} → {email}")
+        changes["updated"].append(f"{person.email} → {email}")
         by_email.pop(person.email.lower(), None)
         person.email = email
         by_email[email.lower()] = person
@@ -905,8 +910,10 @@ def create_state_client(app: flask.Flask):
         offering, and remove students no longer there from it and its sections."""
         changes = sync_bcourses_changes()
         db.session.commit()
-        added, removed, updated, skipped, no_email = (
-            changes[key] for key in ("added", "removed", "updated", "skipped", "no_email"))
+        added, removed, updated, conflicts, skipped, no_email = (
+            changes[key] for key in ("added", "removed", "updated", "conflicts", "skipped", "no_email"))
+        for conflict in conflicts:
+            current_app.logger.warning("bCourses sync in %s didn't update an email: %s", get_course(), conflict)
         current_app.logger.info("bCourses sync in %s by %s: added %d, removed %d (%s), updated %d emails (%s), "
                                 "skipped %d, no email %d", get_course(), current_user.email, len(added),
                                 len(removed), ", ".join(removed), len(updated), ", ".join(updated),
@@ -914,6 +921,9 @@ def create_state_client(app: flask.Flask):
         message = f"Added {len(added)} students and removed {len(removed)}."
         if updated:
             message += f" Updated {len(updated)} emails: " + ", ".join(updated) + "."
+        if conflicts:
+            message += (f" Didn't update {len(conflicts)} emails that belong to a different bCourses account "
+                        "in Sections: " + "; ".join(conflicts) + ".")
         if skipped:
             message += (f" Didn't add {len(skipped)} whose email belongs to a different bCourses account "
                         "in Sections: " + ", ".join(skipped) + ".")
