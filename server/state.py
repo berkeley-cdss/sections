@@ -722,6 +722,20 @@ def create_state_client(app: flask.Flask):
         return fetch_section(section_id=session.section_id)
 
     @api
+    @staff_required
+    def delete_session(session_id: str):
+        """Delete a session, e.g. one started by mistake, and the attendance
+        taken in it."""
+        session_id = int(session_id)
+        session = Session.query.filter_by(id=session_id, course=get_course()).one()
+        check_can_edit(session.section)
+        section_id = session.section_id
+        Attendance.query.filter_by(session_id=session_id).delete()
+        Session.query.filter_by(id=session_id).delete()
+        db.session.commit()
+        return fetch_section(section_id=section_id)
+
+    @api
     @admin_required
     def update_config(**kwargs):
         config = get_config()
