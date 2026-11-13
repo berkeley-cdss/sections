@@ -318,6 +318,39 @@ class User(db.Model, UserMixin):
         db.session.delete(other)
         db.session.flush()
 
+    def take_course_records(self, other: "User", key: str) -> bool:
+        """Move ``other``'s student records in offering ``key`` (its sections,
+        attendance and student role) to this user, and nothing from any other
+        offering. Keeps this user's own section where both have one of the same
+        type, and their own attendance where both have one for a session.
+        Deletes ``other`` if that leaves nothing of theirs, and returns whether
+        it did."""
+        for section in [s for s in other.sections if s.course == key]:
+            if not any(s.course == key and s.name == section.name for s in self.sections):
+                self.sections.append(section)
+        other.sections = [s for s in other.sections if s.course != key]
+        own_sessions = {a.session_id for a in self.attendances}
+        for attendance in [a for a in other.attendances if a.course == key]:
+            if attendance.session_id in own_sessions:
+                other.attendances.remove(attendance)
+                db.session.delete(attendance)
+            else:
+                attendance.student = self
+        if key in other.student_offerings:
+            other.student_offerings = other.student_offerings - {key}
+            if key not in self.staff_offerings:
+                self.student_offerings = self.student_offerings | {key}
+        db.session.flush()
+        still_used = (other.canvas_id is not None or other.sections or other.attendances or other.sections_taught
+                      or other.student_offerings or other.staff_offerings or other.admin_offerings
+                      or ApiKey.query.filter_by(owner_id=other.id).first() is not None
+                      or CanvasToken.query.filter_by(user_id=other.id).first() is not None)
+        if still_used:
+            return False
+        db.session.delete(other)
+        db.session.flush()
+        return True
+
     def sections_in(self, key: str) -> List["Section"]:
         return [section for section in self.sections if section.course == key]
 

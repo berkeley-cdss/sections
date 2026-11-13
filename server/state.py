@@ -41,6 +41,7 @@ from server.models import (
     offering_member,
     set_contains,
     user_section,
+    with_email,
 )
 
 FIRST_WEEK_START = datetime(year=2022, month=6, day=27).timestamp()
@@ -800,11 +801,13 @@ def create_state_client(app: flask.Flask):
 
     def sync_bcourses_changes():
         """Make this offering's students the course's students on bCourses,
-        without committing. Returns a dict of lists: the emails of students
-        ``added`` and ``removed``; the emails of students on the roster who
-        weren't added because the email belongs to someone here with another
-        bCourses account (``skipped``); and the names of students who weren't
-        added because bCourses didn't share their email (``no_email``)."""
+        without committing, and update the emails of people whose bCourses email
+        has changed. Returns a dict of lists: the emails of students ``added``
+        and ``removed``; ``"old → new"`` for each email ``updated``; the emails
+        of students on the roster who weren't added because the email belongs
+        to someone here with another bCourses account (``skipped``); and the
+        names of students who weren't added because bCourses didn't share their
+        email (``no_email``)."""
         course = get_course()
         canvas_key = str(get_canvas_course_id())
         started_at = time.perf_counter()
@@ -818,10 +821,16 @@ def create_state_client(app: flask.Flask):
         by_email = {user.email.lower(): user for user in User.query.filter(func.lower(User.email).in_(emails))}
 
         on_roster = set()
-        changes = {"added": [], "removed": [], "skipped": [], "no_email": []}
+        changes = {"added": [], "removed": [], "updated": [], "conflicts": [], "skipped": [], "no_email": []}
         for entry in roster:
             person = by_canvas_id.get(entry["canvas_id"])
-            if person is None:
+            if person is not None:
+                unmerged = update_email(person, (entry["email"] or "").strip(), by_email, changes)
+                if unmerged is not None:
+                    # The same student under the email bCourses has for them:
+                    # keep them, with their sections, for an admin to merge.
+                    on_roster.add(unmerged)
+            else:
                 email = (entry["email"] or "").strip()
                 if not email:
                     changes["no_email"].append(entry["name"])
@@ -865,6 +874,48 @@ def create_state_client(app: flask.Flask):
                                 time.perf_counter() - fetched_at)
         return {key: sorted(values) for key, values in changes.items()}
 
+    def has_course_records(user: User, course: str) -> bool:
+        """Whether ``user`` is a student in ``course``, or has sections or
+        attendance there (kept after a sync removes them)."""
+        return (course in user.student_offerings
+                or any(section.course == course for section in user.sections)
+                or any(attendance.course == course for attendance in user.attendances))
+
+    def update_email(person: User, email: str, by_email: dict, changes: dict):
+        """Give ``person`` their email on bCourses, as signing in would, if it
+        has changed. If someone else in Sections already has that email, it's
+        left alone and added to ``changes["conflicts"]``, saying what to do.
+        Returns the record with that email if no one has signed in with it,
+        which is the same person, to merge; otherwise None."""
+        if not email or email.lower() == person.email.lower():
+            return
+        owner = by_email.get(email.lower())
+        if owner is not None and owner is not person:
+            if owner.canvas_id is not None:
+                changes["conflicts"].append(
+                    f"bCourses user {person.canvas_id} ({person.email}) has {email} on bCourses, but in "
+                    f"Sections it belongs to bCourses user {owner.canvas_id}. Contact the Sections maintainers")
+            elif has_course_records(owner, get_course()):
+                # Imported or added by staff under the new email before the
+                # student signed in again: the same person, for an admin to merge.
+                changes["conflicts"].append(
+                    f"bCourses user {person.canvas_id} ({person.email}) has {email} on bCourses, but in "
+                    f"Sections it belongs to someone who hasn't signed in. Use Merge Students to merge "
+                    f"{email} into {person.email}, then sync again")
+                return owner
+            else:
+                # Only in other courses, so there's nothing to merge here.
+                # Signing in merges them everywhere (complete_login).
+                changes["conflicts"].append(
+                    f"bCourses user {person.canvas_id} ({person.email}) has {email} on bCourses, but in "
+                    f"Sections it belongs to someone in another course who hasn't signed in. It'll be "
+                    f"updated when {person.email} next signs in to Sections")
+            return None
+        changes["updated"].append(f"{person.email} → {email}")
+        by_email.pop(person.email.lower(), None)
+        person.email = email
+        by_email[email.lower()] = person
+
     @api
     @admin_required
     @session_only
@@ -883,17 +934,64 @@ def create_state_client(app: flask.Flask):
         offering, and remove students no longer there from it and its sections."""
         changes = sync_bcourses_changes()
         db.session.commit()
-        added, removed, skipped, no_email = (changes[key] for key in ("added", "removed", "skipped", "no_email"))
-        current_app.logger.info("bCourses sync in %s by %s: added %d, removed %d (%s), skipped %d, no email %d",
-                                get_course(), current_user.email, len(added), len(removed),
-                                ", ".join(removed), len(skipped), len(no_email))
+        added, removed, updated, conflicts, skipped, no_email = (
+            changes[key] for key in ("added", "removed", "updated", "conflicts", "skipped", "no_email"))
+        for conflict in conflicts:
+            current_app.logger.warning("bCourses sync in %s didn't update an email: %s", get_course(), conflict)
+        current_app.logger.info("bCourses sync in %s by %s: added %d, removed %d (%s), updated %d emails (%s), "
+                                "skipped %d, no email %d", get_course(), current_user.email, len(added),
+                                len(removed), ", ".join(removed), len(updated), ", ".join(updated),
+                                len(skipped), len(no_email))
         message = f"Added {len(added)} students and removed {len(removed)}."
+        if updated:
+            message += f" Updated {len(updated)} emails: " + ", ".join(updated) + "."
+        if conflicts:
+            message += (f" Didn't update {len(conflicts)} emails that belong to someone else in Sections: "
+                        + "; ".join(conflicts) + ".")
         if skipped:
             message += (f" Didn't add {len(skipped)} whose email belongs to a different bCourses account "
                         "in Sections: " + ", ".join(skipped) + ".")
         if no_email:
             message += (f" Didn't add {len(no_email)} whose email bCourses didn't share: "
                         + ", ".join(no_email) + ".")
+        return {**refresh_state(), "custom": {"message": message}}
+
+    @api
+    @admin_required
+    @session_only
+    def merge_students(from_email: str, into_email: str):
+        """Move a student's sections, attendance and student role in this course
+        from a record no one has signed in with (imported, or added by staff) to
+        the same student's other record, e.g. when their email changed before
+        they first signed in, so signing in added them again under the new one.
+        Nothing in other courses moves; the first record is deleted if that
+        leaves nothing of it."""
+        course = get_course()
+        source = with_email(from_email)
+        target = with_email(into_email)
+        if source is None:
+            raise Failure(f"No one in Sections has the email {from_email.strip()}.")
+        if target is None:
+            raise Failure(f"No one in Sections has the email {into_email.strip()}.")
+        if source is target:
+            raise Failure("Those are the same student.")
+        if source.canvas_id is not None:
+            raise Failure(f"{source.email} has signed in to Sections with bCourses, so it's a different account "
+                          f"from {target.email}. Only an email no one has signed in with can be merged.")
+        if course in source.staff_offerings:
+            raise Failure(f"{source.email} is on staff in this course, so it can't be merged into a student.")
+        if not has_course_records(source, course):
+            raise Failure(f"{source.email} isn't a student in this course.")
+        if course not in target.student_offerings:
+            raise Failure(f"{target.email} isn't a student in this course.")
+        source_email = source.email
+        deleted = target.take_course_records(source, course)
+        db.session.commit()
+        current_app.logger.info("Merged %s into %s in %s by %s (%s)", source_email, target.email, course,
+                                current_user.email, "deleted" if deleted else "kept for other courses")
+        message = f"Moved {source_email}'s sections and attendance in this course to {target.email}"
+        message += (f" and removed {source_email}." if deleted
+                    else f". {source_email} still has records outside this course, so it's kept.")
         return {**refresh_state(), "custom": {"message": message}}
 
     @api

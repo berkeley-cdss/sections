@@ -14,6 +14,8 @@ type Props = {
 type Preview = {
   added: Array<string>;
   removed: Array<string>;
+  updated: Array<string>;
+  conflicts: Array<string>;
   skipped: Array<string>;
   no_email: Array<string>;
 };
@@ -74,7 +76,8 @@ export default function SyncBcoursesModal({ show, onClose }: Props) {
   const unchanged =
     preview != null &&
     preview.added.length === 0 &&
-    preview.removed.length === 0;
+    preview.removed.length === 0 &&
+    preview.updated.length === 0;
 
   return (
     <Modal show={show} onShow={loadPreview} onHide={onClose}>
@@ -86,8 +89,9 @@ export default function SyncBcoursesModal({ show, onClose }: Props) {
           Makes this course&rsquo;s students match its bCourses roster,
           including students who haven&rsquo;t accepted their invitation yet.
           Students no longer on the roster are removed from the course and its
-          sections; their attendance records are kept. Staff aren&rsquo;t
-          changed. This may take a minute to load.
+          sections; their attendance records are kept. Students whose email has
+          changed on bCourses get their new email. Staff aren&rsquo;t changed.
+          This may take a minute to load.
         </p>
         {loading ? (
           <div role="status" aria-live="polite">
@@ -103,7 +107,7 @@ export default function SyncBcoursesModal({ show, onClose }: Props) {
             <p>
               {unchanged
                 ? "This course's students already match bCourses."
-                : `This will add ${preview.added.length} and remove ${preview.removed.length} students.`}
+                : `This will add ${preview.added.length} and remove ${preview.removed.length} students, and update ${preview.updated.length} emails.`}
             </p>
             <EmailList
               title={`Students to add (${preview.added.length})`}
@@ -113,6 +117,23 @@ export default function SyncBcoursesModal({ show, onClose }: Props) {
               title={`Students to remove (${preview.removed.length})`}
               emails={preview.removed}
             />
+            <EmailList
+              title={`Emails to update (${preview.updated.length})`}
+              emails={preview.updated}
+            />
+            {preview.conflicts.length > 0 && (
+              <>
+                <p className="mt-3 mb-1">
+                  {preview.conflicts.length} students&rsquo; emails won&rsquo;t
+                  be updated, because their new email on bCourses already
+                  belongs to someone else in Sections. Each one says what to do.
+                </p>
+                <EmailList
+                  title={`Emails not updated (${preview.conflicts.length})`}
+                  emails={preview.conflicts}
+                />
+              </>
+            )}
             {preview.skipped.length > 0 && (
               <>
                 <p className="mt-3 mb-1">

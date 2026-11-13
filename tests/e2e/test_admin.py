@@ -60,15 +60,56 @@ def test_admin_syncs_students_with_bcourses(site, database):
     site.click("Roster Management", site.find('//*[@role="tablist"]'))
     site.click("Sync bCourses Students")
     dialog = site.find('//*[@role="dialog"]')
-    # The fake Canvas lists three students in the course; Jimmy Xu is already here.
-    site.wait(lambda: "This will add 2 and remove 1 students." in dialog.text)
+    # The fake Canvas lists three students in the course. Jimmy Xu is already
+    # here, under an email that's since changed on bCourses.
+    site.wait(lambda: "This will add 2 and remove 1 students, and update 1 emails." in dialog.text)
     assert students(database) == {"jimmyxu@example.com", "dropped@example.com"}
 
     site.click("Sync", dialog)
-    site.wait(lambda: site.has_text("Added 2 students and removed 1."))
-    assert students(database) == {"jimmyxu@example.com", "sharon@berkeley.edu", "angelaz8@berkeley.edu"}
+    site.wait(lambda: site.has_text("Added 2 students and removed 1. "
+                                    "Updated 1 emails: jimmyxu@example.com → jx@berkeley.edu."))
+    assert students(database) == {"jx@berkeley.edu", "sharon@berkeley.edu", "angelaz8@berkeley.edu"}
     with database() as session:
+        assert [user.email for user in session.get(Section, LAB_ID).students] == ["jx@berkeley.edu"]
+
+
+def test_admin_merges_a_student_imported_under_an_old_email(site, database):
+    # Imported under an old email and put in the lab, then signed in as Jimmy
+    # Xu after changing it.
+    with database() as session:
+        jimmy = session.query(User).filter_by(email="jimmyxu@example.com").one()
+        jimmy.sections = []
+        old = User(email="old-jimmy@example.com", name="Jimmy Xu")
+        old.set_role(str(COURSE), is_staff=False)
+        session.add(old)
+        old.sections.append(session.get(Section, LAB_ID))
+        session.commit()
+
+    site.visit(f"{OFFERING}/admin", TEACHER)
+    site.click("Roster Management", site.find('//*[@role="tablist"]'))
+    site.click("Merge Students")
+    dialog = site.find('//*[@role="dialog"]')
+    dialog.find_element(By.ID, "merge-from-email").send_keys("old-jimmy@example.com")
+    dialog.find_element(By.ID, "merge-into-email").send_keys("jimmyxu@example.com")
+    site.click("Merge", dialog)
+    site.wait(lambda: site.has_text("Moved old-jimmy@example.com's sections and attendance in this course to "
+                                    "jimmyxu@example.com and removed old-jimmy@example.com."))
+    with database() as session:
+        assert session.query(User).filter_by(email="old-jimmy@example.com").one_or_none() is None
         assert [user.email for user in session.get(Section, LAB_ID).students] == ["jimmyxu@example.com"]
+
+
+def test_a_failed_merge_shows_why_in_the_dialog(site, database):
+    site.visit(f"{OFFERING}/admin", TEACHER)
+    site.click("Roster Management", site.find('//*[@role="tablist"]'))
+    site.click("Merge Students")
+    dialog = site.find('//*[@role="dialog"]')
+    dialog.find_element(By.ID, "merge-from-email").send_keys("nobody@example.com")
+    dialog.find_element(By.ID, "merge-into-email").send_keys("jimmyxu@example.com")
+    site.click("Merge", dialog)
+    # Shown in the dialog, which stays open, rather than behind it.
+    site.wait(lambda: "No one in Sections has the email nobody@example.com." in dialog.text)
+    assert dialog.is_displayed()
 
 
 def test_students_cannot_open_the_admin_page(site):
