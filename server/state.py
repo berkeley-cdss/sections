@@ -18,6 +18,7 @@ from flask_login import current_user, login_required
 from sqlalchemy import func
 from sqlalchemy.orm import joinedload, noload
 
+import c1c_service
 import canvas_service
 from offering import OFFERING_URL_PREFIX, get_canvas_course_id, get_course, get_course_name, load_offering
 from import_sheet import check_capacity, import_sections_from_url, import_enrollment_from_url, parse_capacity
@@ -707,8 +708,9 @@ def create_state_client(app: flask.Flask):
 
                 if not found:
                     raise Failure("Could not find email that belongs to this class")
-                canvas_id, canvasname = found
+                canvas_id, canvasname, sid = found
                 student = find_or_add_person(email, canvasname, canvas_id=canvas_id)
+                student.sid = sid or student.sid
                 student.set_role(get_course(), is_staff=False)
             add_student_helper(student, section)
         db.session.commit()
@@ -834,6 +836,25 @@ def create_state_client(app: flask.Flask):
         if user is None:
             raise Failure(f"No user found with id {user_id}")
         return user.simple_json
+
+    # Input: user_id, the student whose photo to show.
+    # Output: their Cal 1 Card photo, or 404 if there isn't one.
+    # Description: A plain GET, not @api, so an <img> tag can load it. Staff
+    # only, and only for people in this course. The photo isn't saved, and
+    # "private" keeps shared caches from storing it.
+    @bp.route("/api/students/<int:user_id>/photo")
+    @login_required
+    def student_photo(user_id: int):
+        if not current_user.is_staff:
+            abort(403)
+        student = offering_member(id=user_id)
+        photo = c1c_service.get_photo(student.sid) if student is not None and student.sid else None
+        if photo is None:
+            abort(404)
+        image, content_type = photo
+        response = flask.Response(image, mimetype=content_type)
+        response.headers["Cache-Control"] = "private, max-age=3600"
+        return response
 
     @api
     @staff_required

@@ -28,7 +28,8 @@ class FakeUser:
 
     def get_profile(self) -> dict:
         return {"id": self.id, "name": self.name, "short_name": self.short_name,
-                "primary_email": self.email, "login_id": self.login_id}
+                "primary_email": self.email, "login_id": self.login_id,
+                "sis_user_id": self.sis_user_id}
 
     def get_courses(self, *, enrollment_state="active", include=(), per_page=100) -> list[FakeCourse]:
         return [FakeCourse(course_id, course["enrollments"])

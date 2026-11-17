@@ -69,11 +69,14 @@ def get_user_courses(user_id, access_token: str) -> dict:
 
 
 def get_student_from_email(email: str, access_token: str):
-    """``(canvas user id, name)`` of the student in the current course with
-    login ``email``, or None. The name is their display name, as at login."""
+    """``(canvas user id, name, sid)`` of the student in the current course with
+    login ``email``, or None. The name is their display name, as at login. The
+    SID is None if Canvas doesn't show it to this staff member."""
     course = _client(access_token).get_course(get_canvas_course_id())
     for enrollment in course.get_enrollments(type=["StudentEnrollment"]):
         user = enrollment.user
         if user["login_id"] == email:
-            return str(user["id"]), user.get("short_name") or user["name"]
+            # Canvas's docs promise the SID on the enrollment; fall back to the user record.
+            sid = getattr(enrollment, "sis_user_id", None) or user.get("sis_user_id")
+            return str(user["id"]), user.get("short_name") or user["name"], sid
     return None

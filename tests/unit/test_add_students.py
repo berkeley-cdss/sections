@@ -30,13 +30,14 @@ class AddStudentsTests(CourseTestCase):
 
     def test_fresh_token_is_passed_to_canvas(self):
         self.authorize()
-        with patch("state.canvas_service.get_student_from_email", return_value=("555", "New")) as lookup:
+        with patch("state.canvas_service.get_student_from_email", return_value=("555", "New", "3030000000")) as lookup:
             self.assertTrue(self.add_students("new@test")["success"])
         lookup.assert_called_once_with("new@test", "access")
         db.session.remove()
         new = User.query.filter_by(email="new@test").one()
         # Recorded by Canvas id, so a later email change still finds them.
         self.assertEqual((new.canvas_id, new.student_offerings), ("555", {"cs61a"}))
+        self.assertEqual(new.sid, "3030000000")
         self.assertEqual([s.id for s in new.sections], [self.section_id])
 
     def test_revoked_token_requests_reauthentication(self):
@@ -57,8 +58,26 @@ class AddStudentsTests(CourseTestCase):
         client.return_value.get_course.return_value.get_enrollments.return_value = [Enrollment()]
         with self.app.test_request_context():
             g.offering = Offering.query.filter_by(canvas_id=CS61A).one()
-            self.assertEqual(canvas_service.get_student_from_email("new@test", "token"), ("555", "Display Name"))
+            self.assertEqual(canvas_service.get_student_from_email("new@test", "token"), ("555", "Display Name", None))
             self.assertIsNone(canvas_service.get_student_from_email("other@test", "token"))
+
+    def test_canvas_lookup_reads_the_sid_from_the_enrollment_or_the_user(self):
+        import canvas_service
+
+        class Enrollment:
+            user = {"id": 555, "login_id": "new@test", "name": "Name", "sis_user_id": "3030000001"}
+
+        class EnrollmentWithSid(Enrollment):
+            sis_user_id = "3030000002"
+
+        client = patch("canvas_service._client").start()
+        self.addCleanup(patch.stopall)
+        enrollments = client.return_value.get_course.return_value.get_enrollments
+        with self.app.test_request_context():
+            g.offering = Offering.query.filter_by(canvas_id=CS61A).one()
+            for enrollment, sid in ((EnrollmentWithSid(), "3030000002"), (Enrollment(), "3030000001")):
+                enrollments.return_value = [enrollment]
+                self.assertEqual(canvas_service.get_student_from_email("new@test", "token")[2], sid)
 
     def test_email_lookups_ignore_case(self):
         with patch("state.canvas_service.get_student_from_email") as lookup:

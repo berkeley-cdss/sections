@@ -230,6 +230,9 @@ class User(db.Model, UserMixin):
     # As shared through CalCentral/UCPath and reported by Canvas at login; None if
     # the person hasn't shared any (or hasn't logged in).
     pronouns: str = db.Column(db.String(255), nullable=True)
+    # Student ID number (Canvas's sis_user_id), used to look up their Cal 1 Card
+    # photo. None until Canvas has shown it to us, at login or when staff add them.
+    sid: str = db.Column(db.String(255), nullable=True)
     # Active Canvas courses at last login, keyed by str(canvas course id):
     # {"name", "code", "start_at", "is_staff", "is_admin", "is_student"}.
     canvas_courses: dict = db.Column(db.JSON, nullable=False, default=dict)

@@ -59,6 +59,12 @@ class LoginTests(CourseTestCase):
         self.log_in_as(2, "known@test", pronouns="")
         self.assertIsNone(db.session.get(User, self.known_id).pronouns)
 
+    def test_login_records_the_sid_and_keeps_it_if_canvas_leaves_it_out(self):
+        self.log_in_as(2, "known@test", sis_user_id="3030000000")
+        self.assertEqual(db.session.get(User, self.known_id).sid, "3030000000")
+        self.log_in_as(2, "known@test")
+        self.assertEqual(db.session.get(User, self.known_id).sid, "3030000000")
+
     def test_login_never_claims_someone_else_by_email(self):
         # Canvas user 99 has the email of "staff" (Canvas user 1).
         with self.assertRaises(Exception) as raised:
