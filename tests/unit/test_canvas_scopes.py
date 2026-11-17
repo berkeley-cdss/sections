@@ -100,12 +100,13 @@ class RosterTests(ScopedCanvasTestCase):
     def test_email_and_display_name(self):
         # At Berkeley the login is a CalNet UID, not an email; and Canvas may not share an email.
         self.canvas(people={CS61A: [
-            person(5, email="a@test", name="A", short_name="A (display)", login_id="1717117"),
+            person(5, email="a@test", name="A", short_name="A (display)", login_id="1717117",
+                   sis_user_id="3030000005"),
             person(6, email=None, name="B", short_name=""),
         ]})
         self.assertEqual(canvas_service.get_roster("token"), [
-            {"canvas_id": "5", "email": "a@test", "name": "A (display)"},
-            {"canvas_id": "6", "email": None, "name": "B"},
+            {"canvas_id": "5", "email": "a@test", "name": "A (display)", "sid": "3030000005"},
+            {"canvas_id": "6", "email": None, "name": "B", "sid": None},
         ])
 
     def test_emails_dont_depend_on_the_key_allowing_include_parameters(self):
@@ -139,7 +140,7 @@ class EveryRequestHasAScopeTests(ScopedCanvasTestCase):
         self.assertEqual(len(canvas_service.get_course_staff("token")), 145)
         self.assertEqual(len(canvas_service.get_roster("token")), 250)
         # The last student, on the last page of enrollments.
-        self.assertEqual(canvas_service.get_student_from_email("1001249", "token"), ("1249", "P1249"))
+        self.assertEqual(canvas_service.get_student_from_email("1001249", "token"), ("1249", "P1249", None))
         self.assertIsNone(canvas_service.get_student_from_email("nobody", "token"))
 
     def test_nothing_is_refused(self):

@@ -12,6 +12,7 @@ import Pronouns from "./Pronouns";
 import type { ID, PersonDetails } from "./models";
 import { sectionTitle } from "./models";
 import StateContext from "./StateContext";
+import StudentPhoto from "./StudentPhoto";
 import useAPI from "./useAPI";
 
 type Props = {
@@ -45,10 +46,14 @@ export default function HistoryPage({ userID }: Props): React.ReactNode {
       <br />
       <Row>
         <Col>
-          <h1 className="h2">
-            {user.name}
-            <Pronouns of={user} />
-          </h1>
+          <div className="d-flex align-items-center gap-3 mb-2">
+            {/* userID is set only when staff look at someone else's history. */}
+            {userID != null && <StudentPhoto studentID={userID} size={120} />}
+            <h1 className="h2 mb-0">
+              {user.name}
+              <Pronouns of={user} />
+            </h1>
+          </div>
 
           {userID == null && (
             <p>

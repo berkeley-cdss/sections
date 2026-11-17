@@ -45,6 +45,15 @@ class SyncBcoursesTests(CourseTestCase):
         self.assertEqual((new.canvas_id, new.name), ("4", "New"))
         self.assertEqual(User.query.filter_by(email="imported@test").one().canvas_id, "3")
 
+    def test_saves_sids_from_the_roster_and_keeps_them_if_canvas_hides_them(self):
+        # For roster photos: even students who never sign in get an SID.
+        roster = [{**entry("2", "known@test"), "sid": "3030000002"}, {**entry("4", "new@test"), "sid": "3030000004"}]
+        self.assertTrue(self.sync(roster)["success"])
+        self.assertEqual({user.email: user.sid for user in User.query.filter(User.sid.isnot(None))},
+                         {"known@test": "3030000002", "new@test": "3030000004"})
+        self.assertTrue(self.sync([entry("2", "known@test"), entry("4", "new@test")])["success"])
+        self.assertEqual(User.query.filter_by(email="known@test").one().sid, "3030000002")
+
     def test_removes_students_no_longer_on_the_roster(self):
         known = self.enroll_known_in_data8()
         known.sections.append(db.session.get(Section, self.section_id))

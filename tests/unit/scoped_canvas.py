@@ -169,8 +169,9 @@ class ScopedCanvas:
         users = {}
         for p in self.people.get(course_id, []):
             if (not types or p["type"] in types) and p["state"] in states:
-                users[p["id"]] = {key: p[key] for key in ("id", "name", "short_name", "login_id", "email")
-                                  if p[key] is not None}
+                users[p["id"]] = {key: p[key] for key in ("id", "name", "short_name", "login_id", "email",
+                                                          "sis_user_id")
+                                  if p.get(key) is not None}
         return list(users.values())
 
     _courses_course_id_search_users = _courses_course_id_users
