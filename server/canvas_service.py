@@ -118,10 +118,11 @@ def _course_users(course, **params):
 
 def get_roster(access_token: str) -> list[dict]:
     """The current course's students on bCourses, including those who haven't
-    accepted their invitation yet: ``[{"canvas_id", "email", "name"}]``. The
-    email is the one Canvas shares (their primary email, as at sign-in), or
-    None if it shares none, and the name their display name. Waitlisted
-    students are included when bCourses enrolls them as students.
+    accepted their invitation yet: ``[{"canvas_id", "email", "name", "sid"}]``.
+    The email is the one Canvas shares (their primary email, as at sign-in), or
+    None if it shares none, and the name their display name. The SID is None
+    if Canvas doesn't show it to this staff member. Waitlisted students are
+    included when bCourses enrolls them as students.
 
     Unlike the enrollments endpoint, this lists each student once, however many
     of the course's sections (lecture, lab, discussion) they're enrolled in,
@@ -129,18 +130,22 @@ def get_roster(access_token: str) -> list[dict]:
     course = _client(access_token).get_course(get_canvas_course_id())
     return [
         {"canvas_id": str(user.id), "email": getattr(user, "email", None) or None,
-         "name": getattr(user, "short_name", None) or user.name}
+         "name": getattr(user, "short_name", None) or user.name,
+         "sid": getattr(user, "sis_user_id", None)}
         for user in _course_users(course, enrollment_type=["student"], enrollment_state=["active", "invited"],
                                   include=["email"], per_page=100)
     ]
 
 
 def get_student_from_email(email: str, access_token: str):
-    """``(canvas user id, name)`` of the student in the current course with
-    login ``email``, or None. The name is their display name, as at login."""
+    """``(canvas user id, name, sid)`` of the student in the current course with
+    login ``email``, or None. The name is their display name, as at login. The
+    SID is None if Canvas doesn't show it to this staff member."""
     course = _client(access_token).get_course(get_canvas_course_id())
     for enrollment in course.get_enrollments(type=["StudentEnrollment"]):
         user = enrollment.user
         if user["login_id"] == email:
-            return str(user["id"]), user.get("short_name") or user["name"]
+            # Canvas's docs promise the SID on the enrollment; fall back to the user record.
+            sid = getattr(enrollment, "sis_user_id", None) or user.get("sis_user_id")
+            return str(user["id"]), user.get("short_name") or user["name"], sid
     return None

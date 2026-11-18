@@ -8,6 +8,7 @@ import styled from "styled-components";
 import AddStudentModal from "./AddStudentModal";
 import AttendanceRow from "./AttendanceRow";
 import Pronouns from "./Pronouns";
+import StudentPhoto from "./StudentPhoto";
 import { canEditSection, nextSessionStartTime } from "./models";
 import type { AttendanceStatusType, Person, SectionDetails, Session } from "./models";
 import StateContext from "./StateContext";
@@ -143,8 +144,13 @@ export default function SessionAttendance({ section, session }: Props) {
               {students.map((student) => (
                 <tr key={student.email} className="text-center">
                   <td className="align-middle">
-                    <Link to={`/user/${student.id}`}>{student.name}</Link>
-                    <Pronouns of={student} />
+                    <div className="d-inline-flex align-items-center gap-2">
+                      <StudentPhoto studentID={student.id} size={32} />
+                      <span>
+                        <Link to={`/user/${student.id}`}>{student.name}</Link>
+                        <Pronouns of={student} />
+                      </span>
+                    </div>
                   </td>
                   <td>
                     <AttendanceRow

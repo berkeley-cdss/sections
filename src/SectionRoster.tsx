@@ -8,6 +8,7 @@ import Pronouns from "./Pronouns";
 import { canEditSection } from "./models";
 import type { SectionDetails } from "./models";
 import StateContext from "./StateContext";
+import StudentPhoto from "./StudentPhoto";
 import useAPI from "./useStateAPI";
 import useSectionAPI from "./useSectionAPI";
 
@@ -82,28 +83,31 @@ export default function SectionRoster({ section }: Props) {
         {section.students.map((student) => (
           <CardHolder key={student.email}>
             <Card>
-              <Card.Body>
-                <Card.Title>
-                  <Link to={`/user/${student.id}`}>{student.name}</Link>
-                  <Pronouns of={student} />
-                </Card.Title>
-                <Card.Text>
-                  <a href={`mailto:${student.email}`}>{student.email}</a>
-                </Card.Text>{" "}
-                {canEdit && (
-                  <Button
-                    variant="danger"
-                    size="sm"
-                    onClick={() =>
-                      removeStudent({
-                        student: student.email,
-                        section_id: section.id,
-                      }).then(() => refreshState())
-                    }
-                  >
-                    Remove
-                  </Button>
-                )}
+              <Card.Body className="d-flex gap-3">
+                <StudentPhoto studentID={student.id} size={72} />
+                <div className="text-break">
+                  <Card.Title>
+                    <Link to={`/user/${student.id}`}>{student.name}</Link>
+                    <Pronouns of={student} />
+                  </Card.Title>
+                  <Card.Text>
+                    <a href={`mailto:${student.email}`}>{student.email}</a>
+                  </Card.Text>{" "}
+                  {canEdit && (
+                    <Button
+                      variant="danger"
+                      size="sm"
+                      onClick={() =>
+                        removeStudent({
+                          student: student.email,
+                          section_id: section.id,
+                        }).then(() => refreshState())
+                      }
+                    >
+                      Remove
+                    </Button>
+                  )}
+                </div>
               </Card.Body>
             </Card>
           </CardHolder>

@@ -119,6 +119,18 @@ class SingleUserMigrationTests(unittest.TestCase):
         self.assertNotIn("staff_url", {c["name"] for c in sa.inspect(db.engine).get_columns("course_config")})
         self.assertEqual(self.sql("SELECT count(*) FROM course_config"), [(5,)])
 
+    def test_sid_is_added_and_removed_without_touching_users(self):
+        """0008_sid adds users.sid, empty for everyone, and undoing it removes
+        only that column."""
+        upgrade(revision="0007_canvas_tokens")
+        self.sql("INSERT INTO users (id, email, name, is_global_admin, canvas_courses, staff_offerings, "
+                 "admin_offerings, student_offerings) VALUES (1, 'ada@test', 'Ada', 0, '{}', '', '', 'cs61a')")
+        upgrade(revision="0008_sid")
+        self.assertEqual(self.sql("SELECT email, sid FROM users"), [("ada@test", None)])
+        downgrade(revision="0007_canvas_tokens")
+        self.assertNotIn("sid", {c["name"] for c in sa.inspect(db.engine).get_columns("users")})
+        self.assertEqual(self.sql("SELECT email, student_offerings FROM users"), [("ada@test", "cs61a")])
+
     def test_fresh_database(self):
         upgrade()
         self.assertEqual(self.sql("SELECT count(*) FROM users"), [(0,)])
