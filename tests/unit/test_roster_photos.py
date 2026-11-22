@@ -4,6 +4,7 @@ from unittest.mock import patch
 
 import requests
 
+from server.cache import cache_key_photo, cache_store
 from server.models import User, db
 from tests.unit.support import CS61A, DATA8, CourseTestCase
 
@@ -53,7 +54,7 @@ class RosterPhotoTests(CourseTestCase):
     def use_real_c1c(self):
         self.app.config.update(MOCK_C1C=False, C1C_API_DOMAIN="https://c1c.test/",
                                C1C_API_USERNAME="user", C1C_API_PASSWORD="password",
-                               C1C_PROXY_URL="http://proxy.test")
+                               C1C_PROXY_URL="http://proxy.test", C1C_PHOTO_CACHE_LIFE=60)
 
     def test_real_api_is_asked_through_the_proxy_as_seating_does(self):
         self.use_real_c1c()
@@ -74,3 +75,44 @@ class RosterPhotoTests(CourseTestCase):
             self.assertEqual(self.get(PHOTO_URL.format(self.known_id)).status_code, 404)
             request.side_effect = requests.Timeout()
             self.assertEqual(self.get(PHOTO_URL.format(self.known_id)).status_code, 404)
+
+    def test_c1c_is_asked_once_for_a_photo_shown_twice(self):
+        self.use_real_c1c()
+        with patch("server.c1c_service.requests.get") as request:
+            request.return_value.status_code = 200
+            request.return_value.content = b"jpeg"
+            self.get(PHOTO_URL.format(self.known_id))
+            response = self.get(PHOTO_URL.format(self.known_id))
+        self.assertEqual((response.status_code, response.mimetype, response.data),
+                         (200, "image/jpeg", b"jpeg"))
+        request.assert_called_once()
+
+    def test_c1c_is_asked_again_once_the_photo_is_older_than_its_cache_life(self):
+        self.use_real_c1c()
+        # cachelib's SimpleCache reads the clock through cachelib.simple.time.
+        with patch("server.c1c_service.requests.get") as request, \
+                patch("cachelib.simple.time") as clock:
+            request.return_value.status_code = 200
+            request.return_value.content = b"jpeg"
+            clock.return_value = 1000
+            self.get(PHOTO_URL.format(self.known_id))
+            clock.return_value = 1000 + 59
+            self.get(PHOTO_URL.format(self.known_id))
+            self.assertEqual(request.call_count, 1)
+            clock.return_value = 1000 + 60  # C1C_PHOTO_CACHE_LIFE in use_real_c1c
+            self.get(PHOTO_URL.format(self.known_id))
+            self.assertEqual(request.call_count, 2)
+
+    def test_c1c_is_asked_again_after_it_had_no_photo(self):
+        self.use_real_c1c()
+        with patch("server.c1c_service.requests.get") as request:
+            request.return_value.status_code = 404
+            self.assertEqual(self.get(PHOTO_URL.format(self.known_id)).status_code, 404)
+            request.return_value.status_code = 200
+            request.return_value.content = b"jpeg"
+            self.assertEqual(self.get(PHOTO_URL.format(self.known_id)).data, b"jpeg")
+        self.assertEqual(request.call_count, 2)
+
+    def test_made_up_photos_are_not_cached(self):
+        self.assertEqual(self.get(PHOTO_URL.format(self.known_id)).status_code, 200)
+        self.assertIsNone(cache_store.get(cache_key_photo("3030000000")))

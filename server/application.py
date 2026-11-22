@@ -5,6 +5,7 @@ from flask_migrate import Migrate
 from jinja2 import ChoiceLoader, FileSystemLoader
 from werkzeug.middleware.proxy_fix import ProxyFix
 
+from server.cache import cache_store
 from server.config import load_config
 from server.cross_origin import refuse_cross_origin_requests
 from server.dev_login import create_dev_login_page
@@ -43,6 +44,7 @@ def create_app(test_config: dict | None = None) -> Flask:
     else:
         app.config.update(test_config)
     db.init_app(app)
+    cache_store.init_app(app)
     # Before the other before_request hooks, so a forged post reaches no view. (The /offerings/<id>/
     # blueprint still looks up the offering first: URL preprocessors run before these hooks.)
     refuse_cross_origin_requests(app)

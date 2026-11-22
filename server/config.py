@@ -101,6 +101,14 @@ def load_config(app: flask.Flask):
         C1C_API_USERNAME=os.getenv("C1C_API_USERNAME"),
         C1C_API_PASSWORD=os.getenv("C1C_API_PASSWORD"),
         C1C_PROXY_URL=os.getenv("C1C_PROXY_URL"),
+        # How long, in seconds, the server keeps a C1C photo: 10 days by default,
+        # since staff open each section about weekly (seating keeps them 90 days).
+        # Restarting the server clears them sooner.
+        C1C_PHOTO_CACHE_LIFE=int(os.getenv("C1C_PHOTO_CACHE_LIFE") or 3600 * 24 * 10),
+        # Photos are saved as files in .cache, as in seating. Past 500 of them
+        # (Flask-Caching's default limit), the oldest are removed.
+        CACHE_TYPE="FileSystemCache",
+        CACHE_DIR=".cache",
         PERMANENT_SESSION_LIFETIME=7200,
         SESSION_COOKIE_HTTPONLY=True,
         SESSION_COOKIE_SECURE=not is_dev,

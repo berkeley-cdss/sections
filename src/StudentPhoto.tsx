@@ -26,6 +26,8 @@ export default function StudentPhoto({ studentID, size }: Props) {
     <img
       src={photoURL}
       alt=""
+      // As on seating's seat maps: photos far below the screen load as you scroll near them.
+      loading="lazy"
       width={size}
       height={size}
       className="rounded flex-shrink-0"

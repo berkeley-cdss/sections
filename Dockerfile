@@ -55,6 +55,9 @@ WORKDIR /app
 # server/ stays a package under /app, so gunicorn and flask import server.main
 COPY --chown=app:app server/ ./server/
 COPY --from=frontend --chown=app:app /build/build ./server/static
+# Flask-Caching saves Cal 1 Card photos here (CACHE_DIR in server/config.py), so
+# it has to exist and be writable by the app user, as in seating.
+RUN mkdir -p /app/.cache && chown app:app /app/.cache
 
 USER app
 

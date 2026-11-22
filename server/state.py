@@ -1271,8 +1271,8 @@ def create_state_client(app: flask.Flask):
     # Input: user_id, the student whose photo to show.
     # Output: their Cal 1 Card photo, or 404 if there isn't one.
     # Description: A plain GET, not @api, so an <img> tag can load it. Staff
-    # only, and only for people in this course. The photo isn't saved, and
-    # "private" keeps shared caches from storing it.
+    # only, and only for people in this course. get_photo keeps photos in the
+    # server's cache; "private" keeps shared caches from storing them.
     @bp.route("/api/students/<int:user_id>/photo")
     @login_required
     def student_photo(user_id: int):
