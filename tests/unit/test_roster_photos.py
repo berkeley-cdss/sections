@@ -124,3 +124,39 @@ class RosterPhotoTests(CourseTestCase):
     def test_made_up_photos_are_not_cached(self):
         self.assertEqual(self.get(PHOTO_URL.format(self.known_id)).status_code, 200)
         self.assertIsNone(cache_store.get(cache_key_photo("3030000000")))
+
+    def test_each_c1c_call_is_logged_with_its_status_and_time(self):
+        self.use_real_c1c()
+        with patch("server.c1c_service.requests.get") as request, \
+                self.assertLogs("sections.c1c", "INFO") as logs:
+            request.return_value.status_code = 404
+            self.get(PHOTO_URL.format(self.known_id))
+            request.return_value.status_code = 200
+            request.return_value.content = b"jpeg"
+            self.get(PHOTO_URL.format(self.known_id))
+        self.assertEqual([record.levelname for record in logs.records], ["INFO", "INFO"])
+        self.assertRegex(logs.output[0], r"c1c_photo status=404 ms=\d+\.\d$")
+        self.assertRegex(logs.output[1], r"c1c_photo status=200 ms=\d+\.\d$")
+
+    def test_cached_photos_are_not_logged(self):
+        self.use_real_c1c()
+        with patch("server.c1c_service.requests.get") as request:
+            request.return_value.status_code = 200
+            request.return_value.content = b"jpeg"
+            self.get(PHOTO_URL.format(self.known_id))
+            with self.assertNoLogs("sections.c1c"):
+                self.get(PHOTO_URL.format(self.known_id))
+
+    def test_c1c_problems_are_logged_as_warnings_without_the_sid(self):
+        self.use_real_c1c()
+        with patch("server.c1c_service.requests.get") as request, \
+                self.assertLogs("sections.c1c", "INFO") as logs:
+            request.return_value.status_code = 407
+            self.get(PHOTO_URL.format(self.known_id))
+            # requests' own error messages include the URL, and so the SID.
+            request.side_effect = requests.ReadTimeout("/c1c-api/v1/photo/3030000000 timed out")
+            self.get(PHOTO_URL.format(self.known_id))
+        self.assertEqual([record.levelname for record in logs.records], ["WARNING", "WARNING"])
+        self.assertIn("c1c_photo status=407 ms=", logs.output[0])
+        self.assertIn("c1c_photo error=ReadTimeout ms=", logs.output[1])
+        self.assertNotIn("3030000000", "\n".join(logs.output))

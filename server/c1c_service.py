@@ -5,7 +5,10 @@ since 2024, and takes the same settings. C1C only answers requests from
 allowlisted addresses, so requests go through C1C_PROXY_URL when it's set.
 """
 
+import logging
 import re
+import sys
+import time
 
 import requests
 from flask import current_app
@@ -17,6 +20,17 @@ from server.cache import cache_key_photo, cache_store
 # slow C1C mustn't hold the server's threads for long; the roster shows the
 # placeholder instead.
 TIMEOUT = (3, 5)
+
+# One line per call to C1C: its status (or error) and how long it took. Its own
+# handler at INFO, like audit_log in api_keys.py, because the app's logger drops
+# INFO lines outside debug mode. Never logs the SID.
+c1c_log = logging.getLogger("sections.c1c")
+if not c1c_log.handlers:
+    _handler = logging.StreamHandler(sys.stderr)
+    _handler.setFormatter(logging.Formatter("%(levelname)s %(name)s: %(message)s"))
+    c1c_log.addHandler(_handler)
+    c1c_log.setLevel(logging.INFO)
+    c1c_log.propagate = False
 
 
 # Input: sid, a student's ID number.
@@ -38,6 +52,7 @@ def get_photo(sid: str) -> tuple[bytes, str] | None:
     if cached_photo is not None:
         return cached_photo, "image/jpeg"
     proxy_url = config.get("C1C_PROXY_URL")
+    started_at = time.perf_counter()
     try:
         response = requests.get(
             config["C1C_API_DOMAIN"].rstrip("/") + f"/c1c-api/v1/photo/{sid}",
@@ -45,8 +60,15 @@ def get_photo(sid: str) -> tuple[bytes, str] | None:
             proxies={"http": proxy_url, "https": proxy_url} if proxy_url else None,
             timeout=TIMEOUT,
         )
-    except requests.RequestException:
+    except requests.RequestException as error:
+        elapsed_ms = (time.perf_counter() - started_at) * 1000
+        # Only the error's type (like ReadTimeout): its message has the URL, which has the SID.
+        c1c_log.warning("c1c_photo error=%s ms=%.1f", type(error).__name__, elapsed_ms)
         return None
+    elapsed_ms = (time.perf_counter() - started_at) * 1000
+    # 200 is a photo and 404 (we expect) a student without one; others need a look.
+    level = logging.INFO if response.status_code in (200, 404) else logging.WARNING
+    c1c_log.log(level, "c1c_photo status=%d ms=%.1f", response.status_code, elapsed_ms)
     if response.status_code != 200:
         return None
     cache_store.set(cache_key_photo(sid), response.content, timeout=config["C1C_PHOTO_CACHE_LIFE"])
