@@ -71,6 +71,9 @@ def complete_login(token: dict):
     user.email = email
     user.name = name
     user.pronouns = profile.get("pronouns") or None
+    # Canvas may leave out the SID, depending on what this person may see; keep
+    # the one we have (e.g. from when staff added them) rather than erase it.
+    user.sid = profile.get("sis_user_id") or user.sid
     user.canvas_courses = courses
     user.is_global_admin = override_id is not None and str(override_id) in courses
     user.canvas_synced_at = int(time.time())

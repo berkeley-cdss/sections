@@ -20,6 +20,8 @@ TEST_CONFIG = {
     "CANVAS_SERVER_URL": "https://canvas.test/",
     "CANVAS_CLIENT_ID": "id",
     "CANVAS_CLIENT_SECRET": "secret",
+    # Each test app gets its own empty in-memory cache, so tests don't share photos.
+    "CACHE_TYPE": "SimpleCache",
 }
 
 # Offering 101 was moved from the monorepo, so its rows use the old key "cs61a".

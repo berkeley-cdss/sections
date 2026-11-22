@@ -94,7 +94,7 @@ class FakeCanvasTests(AppTestCase):
         with self.app.test_request_context():
             load_offering(CS169A)
             self.assertEqual(canvas_service.get_student_from_email("jx@berkeley.edu", "dev_access_token"),
-                             (JIMMY_XU, "Jimmy Xu"))
+                             (JIMMY_XU, "Jimmy Xu", "3033033334"))
             # Staff aren't students.
             self.assertIsNone(canvas_service.get_student_from_email("long_yu@berkeley.edu", "dev_access_token"))
 

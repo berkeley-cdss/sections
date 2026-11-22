@@ -94,6 +94,21 @@ def load_config(app: flask.Flask):
         API_KEY_ROLE_MAX_AGE=int(os.getenv("API_KEY_ROLE_MAX_AGE") or DEFAULT_ROLE_MAX_AGE),
         # Proxies in front of Cloud Run, so failed API key attempts are counted per client (api_keys.py).
         TRUSTED_PROXY_HOPS=_trusted_proxy_hops(),
+        # Cal 1 Card photo API (c1c_service.py), with the same settings as
+        # seating. Development uses made-up photos unless MOCK_C1C=false.
+        MOCK_C1C=is_dev and os.getenv("MOCK_C1C", "true").lower() == "true",
+        C1C_API_DOMAIN=os.getenv("C1C_API_DOMAIN"),
+        C1C_API_USERNAME=os.getenv("C1C_API_USERNAME"),
+        C1C_API_PASSWORD=os.getenv("C1C_API_PASSWORD"),
+        C1C_PROXY_URL=os.getenv("C1C_PROXY_URL"),
+        # How long, in seconds, the server keeps a C1C photo: 10 days by default,
+        # since staff open each section about weekly (seating keeps them 90 days).
+        # Restarting the server clears them sooner.
+        C1C_PHOTO_CACHE_LIFE=int(os.getenv("C1C_PHOTO_CACHE_LIFE") or 3600 * 24 * 10),
+        # Photos are saved as files in .cache, as in seating. Past 500 of them
+        # (Flask-Caching's default limit), the oldest are removed.
+        CACHE_TYPE="FileSystemCache",
+        CACHE_DIR=".cache",
         PERMANENT_SESSION_LIFETIME=7200,
         SESSION_COOKIE_HTTPONLY=True,
         SESSION_COOKIE_SECURE=not is_dev,

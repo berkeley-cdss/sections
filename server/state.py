@@ -18,7 +18,7 @@ from flask_login import current_user, login_required
 from sqlalchemy import func
 from sqlalchemy.orm import joinedload, noload
 
-from server import canvas_service
+from server import c1c_service, canvas_service
 from server.canvas_tokens import current_token
 from server.api_keys import audit_log, authenticate, create_key, init_api_keys, record_use, using_api_key
 from server.login import sync_offering_role
@@ -863,6 +863,8 @@ def create_state_client(app: flask.Flask):
                 # their bCourses account, as signing in would.
                 person.canvas_id = entry["canvas_id"]
                 by_canvas_id[entry["canvas_id"]] = person
+            # For their Cal 1 Card photo; keep the SID we have if Canvas hid it.
+            person.sid = entry.get("sid") or person.sid
             on_roster.add(person)
             if course in person.staff_offerings:
                 continue  # roles on staff come from their own sign-in
@@ -1041,8 +1043,9 @@ def create_state_client(app: flask.Flask):
 
                 if not found:
                     raise Failure("Could not find email that belongs to this class")
-                canvas_id, canvasname = found
+                canvas_id, canvasname, sid = found
                 student = find_or_add_person(email, canvasname, canvas_id=canvas_id)
+                student.sid = sid or student.sid
                 student.set_role(get_course(), is_staff=False)
             add_student_helper(student, section)
         db.session.commit()
@@ -1264,6 +1267,25 @@ def create_state_client(app: flask.Flask):
         if user is None:
             raise Failure(f"No user found with id {user_id}")
         return user.simple_json
+
+    # Input: user_id, the student whose photo to show.
+    # Output: their Cal 1 Card photo, or 404 if there isn't one.
+    # Description: A plain GET, not @api, so an <img> tag can load it. Staff
+    # only, and only for people in this course. get_photo keeps photos in the
+    # server's cache; "private" keeps shared caches from storing them.
+    @bp.route("/api/students/<int:user_id>/photo")
+    @login_required
+    def student_photo(user_id: int):
+        if not current_user.is_staff:
+            abort(403)
+        student = offering_member(id=user_id)
+        photo = c1c_service.get_photo(student.sid) if student is not None and student.sid else None
+        if photo is None:
+            abort(404)
+        image, content_type = photo
+        response = flask.Response(image, mimetype=content_type)
+        response.headers["Cache-Control"] = "private, max-age=3600"
+        return response
 
     @api
     @staff_required

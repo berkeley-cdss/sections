@@ -8,6 +8,8 @@ deploy/
 .env
 **/.DS_Store
 **/__pycache__
+# Cal 1 Card photos cached by the server (CACHE_DIR in server/config.py)
+.cache/
 
 # Test coverage data
 .coverage
