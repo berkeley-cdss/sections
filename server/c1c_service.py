@@ -5,6 +5,8 @@ since 2024, and takes the same settings. C1C only answers requests from
 allowlisted addresses, so requests go through C1C_PROXY_URL when it's set.
 """
 
+import re
+
 import requests
 from flask import current_app
 
@@ -23,6 +25,10 @@ TIMEOUT = (3, 5)
 # MOCK_C1C=false. Real photos are kept in cache_store, so reloads skip C1C. With
 # no C1C settings, or if C1C fails, there's no photo and nothing is cached.
 def get_photo(sid: str) -> tuple[bytes, str] | None:
+    # As in seating: the SID goes into C1C's URL, so anything but digits (like
+    # "../") could send the request to a different C1C address.
+    if not re.fullmatch(r"[0-9]+", sid):
+        return None
     config = current_app.config
     if config.get("MOCK_C1C"):
         return fake_photo(sid)

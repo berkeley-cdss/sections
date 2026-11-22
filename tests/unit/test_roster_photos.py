@@ -38,6 +38,14 @@ class RosterPhotoTests(CourseTestCase):
         db.session.commit()
         self.assertEqual(self.get(PHOTO_URL.format(self.known_id)).status_code, 404)
 
+    def test_no_photo_for_an_sid_that_is_not_only_digits(self):
+        self.use_real_c1c()
+        db.session.get(User, self.known_id).sid = "../3030000000"
+        db.session.commit()
+        with patch("server.c1c_service.requests.get") as request:
+            self.assertEqual(self.get(PHOTO_URL.format(self.known_id)).status_code, 404)
+        request.assert_not_called()
+
     def test_no_photo_of_someone_outside_the_course(self):
         outsider = User(email="outsider@test", name="Outsider", sid="3039999999")
         outsider.set_role(str(DATA8), is_staff=False)
