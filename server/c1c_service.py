@@ -10,9 +10,11 @@ from flask import current_app
 
 from server.cache import cache_key_photo, cache_store
 
-# Seconds to wait for C1C, so a slow response can't hold up the request; the
-# roster shows the placeholder instead.
-TIMEOUT = 10
+# Seconds to wait for C1C: up to 3 to connect, then up to 5 for each wait for
+# data (seating waits 10 for each). A page asks for every photo at once, so a
+# slow C1C mustn't hold the server's threads for long; the roster shows the
+# placeholder instead.
+TIMEOUT = (3, 5)
 
 
 # Input: sid, a student's ID number.

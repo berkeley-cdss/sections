@@ -28,6 +28,8 @@ export default function StudentPhoto({ studentID, size }: Props) {
       alt=""
       // As on seating's seat maps: photos far below the screen load as you scroll near them.
       loading="lazy"
+      // Draw the rest of the page without waiting for the photo to be unpacked.
+      decoding="async"
       width={size}
       height={size}
       className="rounded flex-shrink-0"

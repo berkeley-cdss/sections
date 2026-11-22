@@ -66,7 +66,7 @@ class RosterPhotoTests(CourseTestCase):
                          (200, "image/jpeg", b"jpeg"))
         request.assert_called_once_with(
             "https://c1c.test/c1c-api/v1/photo/3030000000", auth=("user", "password"),
-            proxies={"http": "http://proxy.test", "https": "http://proxy.test"}, timeout=10)
+            proxies={"http": "http://proxy.test", "https": "http://proxy.test"}, timeout=(3, 5))
 
     def test_c1c_errors_and_timeouts_mean_no_photo(self):
         self.use_real_c1c()
